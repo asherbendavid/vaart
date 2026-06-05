@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
 import android.os.Looper
+import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -38,6 +39,8 @@ class MainActivity : AppCompatActivity() {
                 result.lastLocation?.let { updateDisplay(it) }
             }
         }
+
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         checkPermissionAndStart()
     }
@@ -71,7 +74,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateDisplay(location: Location) {
         val speedKmh = if (location.hasSpeed()) {
-            (location.speed * 3.6).toInt()
+            val raw = (location.speed * 3.6).toInt()
+            if (raw < 3) 0 else raw
         } else {
             null
         }
