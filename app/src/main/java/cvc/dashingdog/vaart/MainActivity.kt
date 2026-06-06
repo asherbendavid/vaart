@@ -1,110 +1,141 @@
 package cvc.dashingdog.vaart
 
-import android.Manifest
+import android.content.ComponentName
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.location.Location
 import android.os.Bundle
-import android.os.Looper
+import android.os.IBinder
 import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import cvc.dashingdog.vaart.databinding.ActivityMainBinding
+import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.res.ColorStateList.valueOf
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var locationCallback: LocationCallback
+    private var locationService: LocationService? = null
+    private var isBound = false
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) startLocationUpdates()
-        else showPermissionDenied()
+        if (isGranted) startAndBindService()
+    }
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            locationService = (binder as LocationService.LocalBinder).getService()
+            isBound = true
+            observeState()
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            locationService = null
+            isBound = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { updateDisplay(it) }
-            }
-        }
-
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        checkPermissionAndStart()
-    }
+        binding.btnStartStop.setOnClickListener {
+            locationService?.let { svc ->
+                if (svc.uiState.value.isRunning) svc.stopTrip()
+                else svc.startTrip()
+            }
+        }
+        binding.btnResetA.setOnClickListener { locationService?.resetTripA() }
+        binding.btnResetB.setOnClickListener { locationService?.resetTripB() }
 
-    private fun checkPermissionAndStart() {
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            startLocationUpdates()
+            startAndBindService()
         } else {
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
-    private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 1000L
-        ).setMinUpdateIntervalMillis(500L).build()
+    private fun startAndBindService() {
+        val intent = Intent(this, LocationService::class.java)
+        startForegroundService(intent)
+        bindService(intent, serviceConnection, 0)
+    }
 
+    private fun observeState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                locationService?.uiState?.collect { state ->
+                    updateUi(state)
+                }
+            }
+        }
+    }
+
+    private fun updateUi(state: UiState) {
+        // Speed
+        binding.tvSpeed.text = if (state.speedKmh == 0 && state.gpsAccuracy == 0f)
+            "--" else state.speedKmh.toString()
+
+        // GPS indicator
+        val (color, label) = when {
+            state.gpsAccuracy == 0f    -> Color.parseColor("#888888") to "No GPS"
+            state.gpsAccuracy <= 10f   -> Color.parseColor("#22C55E") to "GPS Good"
+            state.gpsAccuracy <= 25f   -> Color.parseColor("#F59E0B") to "GPS Fair"
+            else                       -> Color.parseColor("#EF4444") to "GPS Weak"
+        }
+        binding.vGpsIndicator.backgroundTintList = valueOf(color)
+        binding.tvGpsStatus.setTextColor(color)
+        binding.tvGpsStatus.text = label
+
+        // START/STOP button
+        binding.btnStartStop.text = if (state.isRunning) "STOP" else "START"
+        binding.btnStartStop.backgroundTintList = valueOf(
+            if (state.isRunning) Color.parseColor("#EF4444")
+            else Color.parseColor("#22C55E")
+        )
+
+        // Trip A
+        binding.tvDistA.text = state.tripA.formattedDistance
+        binding.tvTimeA.text = state.tripA.formattedTime
+        binding.tvAvgA.text = if (state.tripA.movingTimeMs > 0)
+            "${state.tripA.avgSpeedKmh} km/h avg" else "-- km/h avg"
+
+        // Trip B
+        binding.tvDistB.text = state.tripB.formattedDistance
+        binding.tvTimeB.text = state.tripB.formattedTime
+        binding.tvAvgB.text = if (state.tripB.movingTimeMs > 0)
+            "${state.tripB.avgSpeedKmh} km/h avg" else "-- km/h avg"
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED && !isBound
         ) {
-            fusedLocationClient.requestLocationUpdates(
-                request, locationCallback, Looper.getMainLooper()
-            )
-            binding.tvGpsStatus.text = "Acquiring..."
+            startAndBindService()
         }
-    }
-
-    private fun updateDisplay(location: Location) {
-        val speedKmh = if (location.hasSpeed()) {
-            val raw = (location.speed * 3.6).toInt()
-            if (raw < 3) 0 else raw
-        } else {
-            null
-        }
-        binding.tvSpeed.text = speedKmh?.toString() ?: "--"
-
-        val accuracy = location.accuracy
-        val (color, statusText) = when {
-            accuracy <= 10f  -> Color.parseColor("#22C55E") to "GPS Good"
-            accuracy <= 25f  -> Color.parseColor("#F59E0B") to "GPS Fair"
-            else             -> Color.parseColor("#EF4444") to "GPS Weak"
-        }
-        binding.vGpsIndicator.backgroundTintList = ColorStateList.valueOf(color)
-        binding.tvGpsStatus.setTextColor(color)
-        binding.tvGpsStatus.text = statusText
-    }
-
-    private fun showPermissionDenied() {
-        binding.tvSpeed.text = "--"
-        binding.tvGpsStatus.text = "Location denied"
-        binding.tvGpsStatus.setTextColor(Color.parseColor("#EF4444"))
-    }
-
-    override fun onResume() {
-        super.onResume()
-        checkPermissionAndStart()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 }
