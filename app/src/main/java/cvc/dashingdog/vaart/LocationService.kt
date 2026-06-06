@@ -99,7 +99,7 @@ class LocationService : Service() {
         lastUpdateTime = now
 
         val speedKmhFloat = if (location.hasSpeed()) location.speed * 3.6f else 0f
-        val displaySpeed = if (speedKmhFloat < 3f) 0 else speedKmhFloat.toInt()
+        val displaySpeed = if (speedKmhFloat < 1f) 0 else speedKmhFloat.toInt()
 
         // Moving state
         when {
