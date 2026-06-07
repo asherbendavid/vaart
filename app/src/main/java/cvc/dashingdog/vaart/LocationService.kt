@@ -25,6 +25,8 @@ class LocationService : Service() {
         const val MOVING_THRESHOLD_KMH = 5f
         const val PAUSE_THRESHOLD_MS = 3 * 60 * 1000L
         const val TRIP_A_EXPIRY_MS = 30 * 60 * 1000L
+        const val KEY_A_MAX_SPEED = "a_max_speed"
+        const val KEY_B_MAX_SPEED = "b_max_speed"
     }
 
     inner class LocalBinder : Binder() {
@@ -66,11 +68,13 @@ class LocationService : Service() {
             isRunning = tripActive,
             tripA = TripData(
                 distanceKm = prefs.getFloat(KEY_A_DISTANCE, 0f).toDouble(),
-                movingTimeMs = prefs.getLong(KEY_A_MOVING_TIME, 0L)
+                movingTimeMs = prefs.getLong(KEY_A_MOVING_TIME, 0L),
+                maxSpeedKmh = prefs.getInt(KEY_A_MAX_SPEED, 0)
             ),
             tripB = TripData(
                 distanceKm = prefs.getFloat(KEY_B_DISTANCE, 0f).toDouble(),
-                movingTimeMs = prefs.getLong(KEY_B_MOVING_TIME, 0L)
+                movingTimeMs = prefs.getLong(KEY_B_MOVING_TIME, 0L),
+                maxSpeedKmh = prefs.getInt(KEY_B_MAX_SPEED, 0)
             )
         )
     }
@@ -119,8 +123,14 @@ class LocationService : Service() {
         if (_uiState.value.isRunning && lastLocation != null && deltaMs > 0) {
             if (speedKmhFloat >= MOVING_THRESHOLD_KMH) {
                 val distKm = lastLocation!!.distanceTo(location) / 1000.0
-                tripA = tripA.copy(distanceKm = tripA.distanceKm + distKm)
-                tripB = tripB.copy(distanceKm = tripB.distanceKm + distKm)
+                tripA = tripA.copy(
+                    distanceKm = tripA.distanceKm + distKm,
+                    maxSpeedKmh = maxOf(tripA.maxSpeedKmh, displaySpeed)
+                )
+                tripB = tripB.copy(
+                    distanceKm = tripB.distanceKm + distKm,
+                    maxSpeedKmh = maxOf(tripB.maxSpeedKmh, displaySpeed)
+                )
             }
             if (isMoving) {
                 tripA = tripA.copy(movingTimeMs = tripA.movingTimeMs + deltaMs)
@@ -167,6 +177,7 @@ class LocationService : Service() {
         prefs.edit()
             .putFloat(KEY_B_DISTANCE, 0f)
             .putLong(KEY_B_MOVING_TIME, 0L)
+            .putInt(KEY_B_MAX_SPEED, 0)
             .apply()
         _uiState.value = _uiState.value.copy(tripB = TripData())
     }
@@ -176,6 +187,7 @@ class LocationService : Service() {
             .putFloat(KEY_A_DISTANCE, 0f)
             .putLong(KEY_A_MOVING_TIME, 0L)
             .putLong(KEY_A_STOP_TIME, 0L)
+            .putInt(KEY_A_MAX_SPEED, 0)
             .apply()
     }
 
@@ -185,6 +197,8 @@ class LocationService : Service() {
             .putLong(KEY_A_MOVING_TIME, tripA.movingTimeMs)
             .putFloat(KEY_B_DISTANCE, tripB.distanceKm.toFloat())
             .putLong(KEY_B_MOVING_TIME, tripB.movingTimeMs)
+            .putLong(KEY_B_MOVING_TIME, tripB.movingTimeMs)
+            .putInt(KEY_B_MAX_SPEED, tripB.maxSpeedKmh)
             .apply()
     }
 

@@ -113,12 +113,16 @@ class MainActivity : AppCompatActivity() {
         binding.tvTimeA.text = state.tripA.formattedTime
         binding.tvAvgA.text = if (state.tripA.movingTimeMs > 0)
             "${state.tripA.avgSpeedKmh} km/h avg" else "-- km/h avg"
+        binding.tvMaxA.text = if (state.tripA.maxSpeedKmh > 0)
+            "${state.tripA.maxSpeedKmh} km/h max" else "-- km/h max"
 
         // Trip B
         binding.tvDistB.text = state.tripB.formattedDistance
         binding.tvTimeB.text = state.tripB.formattedTime
         binding.tvAvgB.text = if (state.tripB.movingTimeMs > 0)
             "${state.tripB.avgSpeedKmh} km/h avg" else "-- km/h avg"
+        binding.tvMaxB.text = if (state.tripB.maxSpeedKmh > 0)
+            "${state.tripB.maxSpeedKmh} km/h max" else "-- km/h max"
     }
 
     override fun onStop() {

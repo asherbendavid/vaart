@@ -2,7 +2,8 @@ package cvc.dashingdog.vaart
 
 data class TripData(
     val distanceKm: Double = 0.0,
-    val movingTimeMs: Long = 0L
+    val movingTimeMs: Long = 0L,
+    val maxSpeedKmh: Int = 0
 ) {
     val avgSpeedKmh: Int
         get() = if (movingTimeMs > 0)
