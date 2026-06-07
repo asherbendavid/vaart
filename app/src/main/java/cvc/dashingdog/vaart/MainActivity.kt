@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var locationService: LocationService? = null
     private var isBound = false
+    private var isHudMode = false
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -58,6 +59,10 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnResetA.setOnClickListener { locationService?.resetTripA() }
         binding.btnResetB.setOnClickListener { locationService?.resetTripB() }
+        binding.btnHud.setOnClickListener {
+            isHudMode = !isHudMode
+            applyHudMode()
+        }
 
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
@@ -151,5 +156,16 @@ class MainActivity : AppCompatActivity() {
         val thousands = total / 1000
         val remainder = total % 1000
         return "%03d %03d km".format(thousands, remainder)
+    }
+
+    private fun applyHudMode() {
+        binding.root.scaleX = if (isHudMode) -1f else 1f
+        binding.btnResetA.isEnabled = !isHudMode
+        binding.btnResetB.isEnabled = !isHudMode
+        //binding.btnHud.textColor  // optional visual feedback
+        binding.btnHud.setTextColor(
+            if (isHudMode) Color.parseColor("#F59E0B")
+            else Color.parseColor("#888888")
+        )
     }
 }

@@ -37,6 +37,20 @@
         app:layout_constraintTop_toTopOf="parent"/>
 
     <!-- Speed display -->
+    <Button
+        android:id="@+id/btnHud"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:text="HUD"
+        android:textSize="11sp"
+        android:textColor="#888888"
+        android:backgroundTint="#1C1C2E"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guideline"/>
+
     <TextView
         android:id="@+id/tvSpeed"
         android:layout_width="0dp"
