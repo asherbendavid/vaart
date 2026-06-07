@@ -27,6 +27,7 @@ class LocationService : Service() {
         const val TRIP_A_EXPIRY_MS = 30 * 60 * 1000L
         const val KEY_A_MAX_SPEED = "a_max_speed"
         const val KEY_B_MAX_SPEED = "b_max_speed"
+        const val KEY_ODO_DISTANCE = "odo_distance"
     }
 
     inner class LocalBinder : Binder() {
@@ -66,6 +67,7 @@ class LocationService : Service() {
 
         _uiState.value = _uiState.value.copy(
             isRunning = tripActive,
+            odometerKm = prefs.getFloat(KEY_ODO_DISTANCE, 0f).toDouble(),
             tripA = TripData(
                 distanceKm = prefs.getFloat(KEY_A_DISTANCE, 0f).toDouble(),
                 movingTimeMs = prefs.getLong(KEY_A_MOVING_TIME, 0L),
@@ -119,6 +121,7 @@ class LocationService : Service() {
 
         var tripA = _uiState.value.tripA
         var tripB = _uiState.value.tripB
+        var newOdo = _uiState.value.odometerKm
 
         if (_uiState.value.isRunning && lastLocation != null && deltaMs > 0) {
             if (speedKmhFloat >= MOVING_THRESHOLD_KMH) {
@@ -131,12 +134,13 @@ class LocationService : Service() {
                     distanceKm = tripB.distanceKm + distKm,
                     maxSpeedKmh = maxOf(tripB.maxSpeedKmh, displaySpeed)
                 )
+                newOdo = _uiState.value.odometerKm + distKm
             }
             if (isMoving) {
                 tripA = tripA.copy(movingTimeMs = tripA.movingTimeMs + deltaMs)
                 tripB = tripB.copy(movingTimeMs = tripB.movingTimeMs + deltaMs)
             }
-            saveTrips(tripA, tripB)
+            saveState(tripA, tripB, newOdo)
         }
 
         lastLocation = location
@@ -144,7 +148,8 @@ class LocationService : Service() {
             speedKmh = displaySpeed,
             gpsAccuracy = location.accuracy,
             tripA = tripA,
-            tripB = tripB
+            tripB = tripB,
+            odometerKm = newOdo
         )
     }
 
@@ -191,14 +196,15 @@ class LocationService : Service() {
             .apply()
     }
 
-    private fun saveTrips(tripA: TripData, tripB: TripData) {
+    private fun saveState(tripA: TripData, tripB: TripData, odoKm: Double) {
         prefs.edit()
             .putFloat(KEY_A_DISTANCE, tripA.distanceKm.toFloat())
             .putLong(KEY_A_MOVING_TIME, tripA.movingTimeMs)
+            .putInt(KEY_A_MAX_SPEED, tripA.maxSpeedKmh)
             .putFloat(KEY_B_DISTANCE, tripB.distanceKm.toFloat())
             .putLong(KEY_B_MOVING_TIME, tripB.movingTimeMs)
-            .putLong(KEY_B_MOVING_TIME, tripB.movingTimeMs)
             .putInt(KEY_B_MAX_SPEED, tripB.maxSpeedKmh)
+            .putFloat(KEY_ODO_DISTANCE, odoKm.toFloat())
             .apply()
     }
 

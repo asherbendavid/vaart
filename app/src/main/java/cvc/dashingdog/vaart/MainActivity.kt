@@ -90,6 +90,9 @@ class MainActivity : AppCompatActivity() {
         binding.tvSpeed.text = if (state.speedKmh == 0 && state.gpsAccuracy == 0f)
             "--" else state.speedKmh.toString()
 
+        // Odometer
+        binding.tvOdometer.text = formatOdometer(state.odometerKm)
+
         // GPS indicator
         val (color, label) = when {
             state.gpsAccuracy == 0f    -> Color.parseColor("#888888") to "No GPS"
@@ -141,5 +144,12 @@ class MainActivity : AppCompatActivity() {
         ) {
             startAndBindService()
         }
+    }
+
+    private fun formatOdometer(km: Double): String {
+        val total = km.toInt().coerceIn(0, 999999)
+        val thousands = total / 1000
+        val remainder = total % 1000
+        return "%03d %03d km".format(thousands, remainder)
     }
 }
