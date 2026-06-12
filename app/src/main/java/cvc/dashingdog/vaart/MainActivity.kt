@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnStartStop.setOnClickListener {
             locationService?.let { svc ->
-                if (svc.uiState.value.isRunning) svc.stopTrip()
+                if (svc.uiState.value.isRunning) handleStopWithSummary()
                 else svc.startTrip()
             }
         }
@@ -173,28 +173,36 @@ class MainActivity : AppCompatActivity() {
         } else {
             // switching to real vehicle — show odo check first
             lifecycleScope.launch {
-                val vehicle = repository.getVehicleById(vehicleId) ?: return@launch
-                showOdoCheckPrompt(vehicle) { confirmedVehicle ->
-                    lifecycleScope.launch {
-                        saveCurrentVehicleData()
-                        if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
-                        isVehicleCorrectionInProgress = false
-                        locationService?.loadVehicleData(
-                            confirmedVehicle.odometerKm,
-                            TripData(
-                                distanceKm = vehicle.tripBDistanceKm,
-                                movingTimeMs = vehicle.tripBMovingTimeMs,
-                                maxSpeedKmh = vehicle.tripBMaxSpeedKmh
+                val newVehicle = repository.getVehicleById(vehicleId) ?: return@launch
+                if (isVehicleCorrectionInProgress) {
+                    performVehicleCorrection(newVehicle)
+                } else {
+                 showOdoCheckPrompt(newVehicle) { confirmedVehicle ->
+                     lifecycleScope.launch {
+                           saveCurrentVehicleData()
+                            if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
+                            isVehicleCorrectionInProgress = false
+                            locationService?.loadVehicleData(
+                               confirmedVehicle.odometerKm,
+                               TripData(
+                                  distanceKm = newVehicle.tripBDistanceKm,
+                                  movingTimeMs = newVehicle.tripBMovingTimeMs,
+                                  maxSpeedKmh = newVehicle.tripBMaxSpeedKmh
+                              )
                             )
-                        )
                         currentVehicleId = vehicleId
                         saveActiveVehicleId()
                         updateVehicleSelectorButton()
                         loadVehicleSelector()
                     }
+                 }
                 }
             }
         }
+    }
+
+    private fun performVehicleCorrection(newVehicle: Vehicle) {
+        // Phase 5
     }
 
     private fun showNewVehicleDialog(prefilledOdo: Double = 0.0, prefilledFromAnonymous: Boolean = false) {
@@ -353,6 +361,64 @@ class MainActivity : AppCompatActivity() {
                 }
         }
         dialog.show()
+    }
+
+    private fun handleStopWithSummary() {
+        val svc = locationService ?: return
+        val tripA = svc.uiState.value.tripA
+        val vehicle = vehicleList.find { it.id == currentVehicleId }
+        val vehicleName = vehicle?.name ?: "Anonymous"
+        val vehicleReg = vehicle?.registration
+        svc.stopTrip()
+        showSessionSummaryDialog(tripA, vehicleName, vehicleReg)
+    }
+
+    private fun showSessionSummaryDialog(tripA: TripData, vehicleName: String, vehicleReg: String?) {
+        val regLine = if (!vehicleReg.isNullOrEmpty()) "\nRegistration: $vehicleReg" else ""
+        val message = buildString {
+            append("Vehicle: $vehicleName$regLine\n\n")
+            append("Distance:  ${tripA.formattedDistance}\n")
+            append("Time:      ${tripA.formattedTime}\n")
+            append("Avg speed: ${if (tripA.movingTimeMs > 0) "${tripA.avgSpeedKmh} km/h" else "--"}\n")
+            append("Max speed: ${if (tripA.maxSpeedKmh > 0) "${tripA.maxSpeedKmh} km/h" else "--"}")
+        }
+
+        val changeEnabled = false /* disabled until phase 5 when {
+            vehicleList.isEmpty() -> false
+            vehicleList.size == 1 && vehicleList[0].id == currentVehicleId -> false
+            else -> true
+        } */
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Session Complete")
+            .setMessage(message)
+            .setPositiveButton("Done", null)
+            .setNeutralButton("Change vehicle", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).apply {
+                isEnabled = changeEnabled
+                setOnClickListener {
+                    dialog.dismiss()
+                    showVehicleChangePicker()
+                }
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showVehicleChangePicker() {
+        val names = vehicleList.map { it.name }.toTypedArray()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Change vehicle")
+            .setItems(names) { _, index ->
+                isVehicleCorrectionInProgress = true
+                handleVehicleSelected(vehicleList[index].id)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun startAndBindService() {
