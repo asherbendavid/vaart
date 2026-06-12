@@ -170,42 +170,49 @@ class MainActivity : AppCompatActivity() {
             etOdo.setText(prefilledOdo.toInt().toString())
         }
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("New Vehicle")
             .setView(dialogView)
-            .setPositiveButton("Save") { _, _ ->
-                val name = etName.text.toString().trim()
-                val reg = etReg.text.toString().trim().ifEmpty { null }
-                val notes = etNotes.text.toString().trim().ifEmpty { null }
-                val odo = etOdo.text.toString().toDoubleOrNull() ?: 0.0
-
-                if (name.isEmpty()) {
-                    android.widget.Toast.makeText(
-                        this, "Vehicle name is required", Toast.LENGTH_SHORT
-                    ).show()
-                    return@setPositiveButton
-                }
-
-                lifecycleScope.launch {
-                    val newVehicle = Vehicle(
-                        name = name,
-                        registration = reg,
-                        notes = notes,
-                        odometerKm = odo,
-                        tripBDistanceKm = if (prefilledFromAnonymous)
-                            locationService?.uiState?.value?.tripB?.distanceKm ?: 0.0 else 0.0,
-                        tripBMovingTimeMs = if (prefilledFromAnonymous)
-                            locationService?.uiState?.value?.tripB?.movingTimeMs ?: 0L else 0L,
-                        tripBMaxSpeedKmh = if (prefilledFromAnonymous)
-                            locationService?.uiState?.value?.tripB?.maxSpeedKmh ?: 0 else 0
-                    )
-                    val newId = repository.saveVehicle(newVehicle)
-                    currentVehicleId = newId.toInt()
-                    loadVehicleSelector()
-                }
-            }
+            .setPositiveButton("Save", null) // null listener here - we override below
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener {
+                    val name = etName.text.toString().trim()
+                    val reg = etReg.text.toString().trim().ifEmpty { null }
+                    val notes = etNotes.text.toString().trim().ifEmpty { null }
+                    val odo = etOdo.text.toString().toDoubleOrNull() ?: 0.0
+
+                    if (name.isEmpty()) {
+                        etName.error = "Vehicle name is required"
+                        etName.requestFocus()
+                        return@setOnClickListener // dialog stays open
+                    }
+
+                    lifecycleScope.launch {
+                        val newVehicle = Vehicle(
+                            name = name,
+                            registration = reg,
+                            notes = notes,
+                            odometerKm = odo,
+                            tripBDistanceKm = if (prefilledFromAnonymous)
+                                locationService?.uiState?.value?.tripB?.distanceKm ?: 0.0 else 0.0,
+                            tripBMovingTimeMs = if (prefilledFromAnonymous)
+                                locationService?.uiState?.value?.tripB?.movingTimeMs ?: 0L else 0L,
+                            tripBMaxSpeedKmh = if (prefilledFromAnonymous)
+                                locationService?.uiState?.value?.tripB?.maxSpeedKmh ?: 0 else 0
+                        )
+                        val newId = repository.saveVehicle(newVehicle)
+                        currentVehicleId = newId.toInt()
+                        loadVehicleSelector()
+                    }
+                    dialog.dismiss()
+                }
+        }
+
+        dialog.show()
     }
 
     private fun startAndBindService() {
