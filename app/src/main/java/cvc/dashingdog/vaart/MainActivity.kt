@@ -26,6 +26,9 @@ class MainActivity : AppCompatActivity() {
     private var locationService: LocationService? = null
     private var isBound = false
     private var isHudMode = false
+    private var currentVehicleId : Int = -1 // -1 = anonymous
+    private var vehicleList: List<Vehicle> = emptyList()
+    private lateinit var repository: VehicleRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -63,6 +66,9 @@ class MainActivity : AppCompatActivity() {
             isHudMode = !isHudMode
             applyHudMode()
         }
+        repository = VehicleRepository(this)
+        binding.btnVehicleSelector.setOnClickListener { showVehicleMenu() }
+        loadVehicleSelector()
 
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
@@ -72,6 +78,60 @@ class MainActivity : AppCompatActivity() {
         } else {
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+    }
+
+    private fun loadVehicleSelector() {
+        lifecycleScope.launch {
+            vehicleList = repository.getAllVehicles()
+            updateVehicleSelectorButton()
+        }
+    }
+
+    private fun updateVehicleSelectorButton() {
+        val label = if (currentVehicleId == -1) {
+            "Anonymous"
+        } else {
+            vehicleList.find { it.id == currentVehicleId }?.name ?: "Anonymous"
+        }
+        binding.btnVehicleSelector.text = label
+    }
+
+    private fun showVehicleMenu() {
+        val popup = androidx.appcompat.widget.PopupMenu(this, binding.btnVehicleSelector)
+
+        // Vehicles
+        vehicleList.forEachIndexed { index, vehicle ->
+            popup.menu.add(0, vehicle.id, index, vehicle.name).apply {
+                isChecked = vehicle.id == currentVehicleId
+            }
+        }
+
+        // Separator + Anonymous
+        popup.menu.add(1, -1, vehicleList.size, "Anonymous").apply {
+            isChecked = currentVehicleId == -1
+        }
+
+        // Separator + New vehicle
+        popup.menu.add(2, -2, vehicleList.size + 1, "New vehicle...")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                -2 -> { showNewVehicleDialog(); true }
+                else -> { handleVehicleSelected(item.itemId); true }
+            }
+        }
+        popup.show()
+    }
+
+    private fun handleVehicleSelected(vehicleId: Int) {
+        if (vehicleId == currentVehicleId) return
+        currentVehicleId = vehicleId
+        updateVehicleSelectorButton()
+        // Full switching logic comes in step 4
+    }
+
+    private fun showNewVehicleDialog() {
+        // Step 3
     }
 
     private fun startAndBindService() {
@@ -131,6 +191,17 @@ class MainActivity : AppCompatActivity() {
             "${state.tripB.avgSpeedKmh} km/h avg" else "-- km/h avg"
         binding.tvMaxB.text = if (state.tripB.maxSpeedKmh > 0)
             "${state.tripB.maxSpeedKmh} km/h max" else "-- km/h max"
+
+        binding.btnVehicleSelector.isEnabled = !state.isRunning
+        binding.btnVehicleSelector.setTextColor(
+            if (state.isRunning) Color.parseColor("#444444")
+            else Color.parseColor("#888888")
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadVehicleSelector()
     }
 
     override fun onStop() {
