@@ -28,6 +28,7 @@ class LocationService : Service() {
         const val KEY_A_MAX_SPEED = "a_max_speed"
         const val KEY_B_MAX_SPEED = "b_max_speed"
         const val KEY_ODO_DISTANCE = "odo_distance"
+        const val KEY_ACTIVE_VEHICLE_ID = "active_vehicle_id"
     }
 
     inner class LocalBinder : Binder() {
@@ -231,6 +232,26 @@ class LocationService : Service() {
             .setContentIntent(pi)
             .setOngoing(true)
             .build()
+    }
+
+    fun loadVehicleData(odometerKm: Double, tripB: TripData) {
+        lastLocation = null // prevent phantom distance on switch
+        val current = _uiState.value
+        _uiState.value = current.copy(
+            odometerKm = odometerKm,
+            tripB = tripB
+        )
+        saveState(current.tripA, tripB, odometerKm)
+    }
+
+    fun resetForAnonymous() {
+        lastLocation = null
+        val current = _uiState.value
+        _uiState.value = current.copy(
+            odometerKm = 0.0,
+            tripB = TripData()
+        )
+        saveState(current.tripA, TripData(), 0.0)
     }
 
     override fun onBind(intent: Intent): IBinder = binder

@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private var currentVehicleId : Int = -1 // -1 = anonymous
     private var vehicleList: List<Vehicle> = emptyList()
     private lateinit var repository: VehicleRepository
+    private var isVehicleCorrectionInProgress = false
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -42,6 +43,7 @@ class MainActivity : AppCompatActivity() {
             locationService = (binder as LocationService.LocalBinder).getService()
             isBound = true
             observeState()
+            loadActiveVehicle()
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             locationService = null
@@ -100,28 +102,32 @@ class MainActivity : AppCompatActivity() {
     private fun showVehicleMenu() {
         val popup = androidx.appcompat.widget.PopupMenu(this, binding.btnVehicleSelector)
 
-        // Vehicles
         vehicleList.forEachIndexed { index, vehicle ->
             popup.menu.add(0, vehicle.id, index, vehicle.name).apply {
                 isChecked = vehicle.id == currentVehicleId
             }
         }
 
-        // Separator + Anonymous
-        popup.menu.add(1, -1, vehicleList.size, "Anonymous").apply {
+        // Separator
+        popup.menu.add(0, -3, vehicleList.size, "──────────────").isEnabled = false
+
+        // Anonymous
+        popup.menu.add(1, -1, vehicleList.size + 1, "Anonymous").apply {
             isChecked = currentVehicleId == -1
         }
 
-        // Separator + New vehicle
-        popup.menu.add(2, -2, vehicleList.size + 1, "New vehicle...")
+        // Separator
+        popup.menu.add(1, -4, vehicleList.size + 2, "──────────────").isEnabled = false
+
+        // New vehicle
+        popup.menu.add(2, -2, vehicleList.size + 3, "New vehicle...")
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 -2 -> {
                     if (currentVehicleId == -1) {
                         val currentOdo = locationService?.uiState?.value?.odometerKm ?: 0.0
-                        val hasData = currentOdo > 0.0
-                        if (hasData) {
+                        if (currentOdo > 0.0) {
                             androidx.appcompat.app.AlertDialog.Builder(this)
                                 .setTitle("Anonymous Data")
                                 .setMessage(
@@ -133,9 +139,7 @@ class MainActivity : AppCompatActivity() {
                                         prefilledFromAnonymous = true
                                     )
                                 }
-                                .setNegativeButton("No") { _, _ ->
-                                    showNewVehicleDialog()
-                                }
+                                .setNegativeButton("No") { _, _ -> showNewVehicleDialog() }
                                 .show()
                         } else {
                             showNewVehicleDialog()
@@ -145,6 +149,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     true
                 }
+                -3, -4 -> true
                 else -> { handleVehicleSelected(item.itemId); true }
             }
         }
@@ -153,9 +158,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleVehicleSelected(vehicleId: Int) {
         if (vehicleId == currentVehicleId) return
-        currentVehicleId = vehicleId
-        updateVehicleSelectorButton()
-        // Full switching logic comes in step 4
+        if (vehicleId == -1) {
+            // switching to anonymous
+            lifecycleScope.launch {
+                saveCurrentVehicleData()
+                if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
+                isVehicleCorrectionInProgress = false
+                locationService?.resetForAnonymous()
+                currentVehicleId = -1
+                saveActiveVehicleId()
+                updateVehicleSelectorButton()
+                loadVehicleSelector()
+            }
+        } else {
+            // switching to real vehicle — show odo check first
+            lifecycleScope.launch {
+                val vehicle = repository.getVehicleById(vehicleId) ?: return@launch
+                showOdoCheckPrompt(vehicle) { confirmedVehicle ->
+                    lifecycleScope.launch {
+                        saveCurrentVehicleData()
+                        if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
+                        isVehicleCorrectionInProgress = false
+                        locationService?.loadVehicleData(
+                            confirmedVehicle.odometerKm,
+                            TripData(
+                                distanceKm = vehicle.tripBDistanceKm,
+                                movingTimeMs = vehicle.tripBMovingTimeMs,
+                                maxSpeedKmh = vehicle.tripBMaxSpeedKmh
+                            )
+                        )
+                        currentVehicleId = vehicleId
+                        saveActiveVehicleId()
+                        updateVehicleSelectorButton()
+                        loadVehicleSelector()
+                    }
+                }
+            }
+        }
     }
 
     private fun showNewVehicleDialog(prefilledOdo: Double = 0.0, prefilledFromAnonymous: Boolean = false) {
@@ -212,6 +251,107 @@ class MainActivity : AppCompatActivity() {
                 }
         }
 
+        dialog.show()
+
+    }
+
+    private fun loadActiveVehicle() {
+        val prefs = getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)
+        val savedId = prefs.getInt(LocationService.KEY_ACTIVE_VEHICLE_ID, -1)
+        if (savedId == -1) {
+            currentVehicleId = -1
+            updateVehicleSelectorButton()
+            return
+        }
+        lifecycleScope.launch {
+            val vehicle = repository.getVehicleById(savedId)
+            if (vehicle != null) {
+                currentVehicleId = savedId
+                locationService?.loadVehicleData(
+                    vehicle.odometerKm,
+                    TripData(
+                        distanceKm = vehicle.tripBDistanceKm,
+                        movingTimeMs = vehicle.tripBMovingTimeMs,
+                        maxSpeedKmh = vehicle.tripBMaxSpeedKmh
+                    )
+                )
+                updateVehicleSelectorButton()
+            } else {
+                // vehicle was deleted externally, fall back to anonymous
+                currentVehicleId = -1
+                saveActiveVehicleId()
+                updateVehicleSelectorButton()
+            }
+        }
+    }
+
+    private fun saveActiveVehicleId() {
+        getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt(LocationService.KEY_ACTIVE_VEHICLE_ID, currentVehicleId)
+            .apply()
+    }
+
+    private suspend fun saveCurrentVehicleData() {
+        if (currentVehicleId == -1) return
+        val state = locationService?.uiState?.value ?: return
+        val vehicle = repository.getVehicleById(currentVehicleId) ?: return
+        repository.updateVehicle(
+            vehicle.copy(
+                odometerKm = state.odometerKm,
+                tripBDistanceKm = state.tripB.distanceKm,
+                tripBMovingTimeMs = state.tripB.movingTimeMs,
+                tripBMaxSpeedKmh = state.tripB.maxSpeedKmh,
+                lastUsedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    private fun showOdoCheckPrompt(vehicle: Vehicle, onConfirmed: (Vehicle) -> Unit) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(vehicle.name)
+            .setMessage(
+                "Is the odometer value of ${vehicle.odometerKm.toInt()} km still correct?"
+            )
+            .setPositiveButton("Yes") { _, _ -> onConfirmed(vehicle) }
+            .setNegativeButton("No") { _, _ ->
+                showOdoUpdateDialog(vehicle) { updatedVehicle ->
+                    lifecycleScope.launch {
+                        repository.updateVehicle(updatedVehicle)
+                        onConfirmed(updatedVehicle)
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showOdoUpdateDialog(vehicle: Vehicle, onUpdated: (Vehicle) -> Unit) {
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(vehicle.odometerKm.toInt().toString())
+            selectAll()
+            setPadding(48, 24, 48, 24)
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Update Odometer")
+            .setMessage("Enter current odometer reading for ${vehicle.name} (km):")
+            .setView(input)
+            .setPositiveButton("Update", null)
+            .setNegativeButton("Cancel") { _, _ -> onUpdated(vehicle) }
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener {
+                    val newOdo = input.text.toString().toDoubleOrNull()
+                    if (newOdo == null) {
+                        input.error = "Please enter a valid number"
+                        return@setOnClickListener
+                    }
+                    onUpdated(vehicle.copy(odometerKm = newOdo))
+                    dialog.dismiss()
+                }
+        }
         dialog.show()
     }
 
