@@ -19,6 +19,7 @@ import cvc.dashingdog.vaart.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.res.ColorStateList.valueOf
+import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
 
@@ -116,7 +117,34 @@ class MainActivity : AppCompatActivity() {
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                -2 -> { showNewVehicleDialog(); true }
+                -2 -> {
+                    if (currentVehicleId == -1) {
+                        val currentOdo = locationService?.uiState?.value?.odometerKm ?: 0.0
+                        val hasData = currentOdo > 0.0
+                        if (hasData) {
+                            androidx.appcompat.app.AlertDialog.Builder(this)
+                                .setTitle("Anonymous Data")
+                                .setMessage(
+                                    "You have ${String.format("%.1f", currentOdo)} km on the anonymous odometer. Apply this data to the new vehicle?"
+                                )
+                                .setPositiveButton("Yes") { _, _ ->
+                                    showNewVehicleDialog(
+                                        prefilledOdo = currentOdo,
+                                        prefilledFromAnonymous = true
+                                    )
+                                }
+                                .setNegativeButton("No") { _, _ ->
+                                    showNewVehicleDialog()
+                                }
+                                .show()
+                        } else {
+                            showNewVehicleDialog()
+                        }
+                    } else {
+                        showNewVehicleDialog()
+                    }
+                    true
+                }
                 else -> { handleVehicleSelected(item.itemId); true }
             }
         }
@@ -130,8 +158,54 @@ class MainActivity : AppCompatActivity() {
         // Full switching logic comes in step 4
     }
 
-    private fun showNewVehicleDialog() {
-        // Step 3
+    private fun showNewVehicleDialog(prefilledOdo: Double = 0.0, prefilledFromAnonymous: Boolean = false) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_new_vehicle, null)
+
+        val etName = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleName)
+        val etReg = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleReg)
+        val etNotes = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleNotes)
+        val etOdo = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleOdo)
+
+        if (prefilledFromAnonymous) {
+            etOdo.setText(prefilledOdo.toInt().toString())
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("New Vehicle")
+            .setView(dialogView)
+            .setPositiveButton("Save") { _, _ ->
+                val name = etName.text.toString().trim()
+                val reg = etReg.text.toString().trim().ifEmpty { null }
+                val notes = etNotes.text.toString().trim().ifEmpty { null }
+                val odo = etOdo.text.toString().toDoubleOrNull() ?: 0.0
+
+                if (name.isEmpty()) {
+                    android.widget.Toast.makeText(
+                        this, "Vehicle name is required", Toast.LENGTH_SHORT
+                    ).show()
+                    return@setPositiveButton
+                }
+
+                lifecycleScope.launch {
+                    val newVehicle = Vehicle(
+                        name = name,
+                        registration = reg,
+                        notes = notes,
+                        odometerKm = odo,
+                        tripBDistanceKm = if (prefilledFromAnonymous)
+                            locationService?.uiState?.value?.tripB?.distanceKm ?: 0.0 else 0.0,
+                        tripBMovingTimeMs = if (prefilledFromAnonymous)
+                            locationService?.uiState?.value?.tripB?.movingTimeMs ?: 0L else 0L,
+                        tripBMaxSpeedKmh = if (prefilledFromAnonymous)
+                            locationService?.uiState?.value?.tripB?.maxSpeedKmh ?: 0 else 0
+                    )
+                    val newId = repository.saveVehicle(newVehicle)
+                    currentVehicleId = newId.toInt()
+                    loadVehicleSelector()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun startAndBindService() {
