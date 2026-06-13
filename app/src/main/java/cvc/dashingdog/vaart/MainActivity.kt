@@ -73,6 +73,12 @@ class MainActivity : AppCompatActivity() {
         binding.btnVehicleSelector.setOnClickListener { showVehicleMenu() }
         loadVehicleSelector()
 
+        binding.tvOdometer.setOnLongClickListener {
+            val state = locationService?.uiState?.value ?: return@setOnLongClickListener true
+            if (!state.isRunning) showStandaloneOdoUpdateDialog(state)
+            true
+        }
+
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
@@ -83,6 +89,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showStandaloneOdoUpdateDialog(state: UiState) {
+        val vehicleName = if (currentVehicleId == -1) "Anonymous"
+        else vehicleList.find { it.id == currentVehicleId }?.name ?: "Anonymous"
+
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(state.odometerKm.toInt().toString())
+            selectAll()
+            setPadding(48, 24, 48, 24)
+        }
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Update Odometer")
+            .setMessage("Odometer for $vehicleName (km):")
+            .setView(input)
+            .setPositiveButton("Update", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener {
+                    val newOdo = input.text.toString().toDoubleOrNull()
+                    if (newOdo == null) {
+                        input.error = "Please enter a valid number"
+                        return@setOnClickListener
+                    }
+                    lifecycleScope.launch {
+                        locationService?.loadVehicleData(newOdo, state.tripB)
+                        if (currentVehicleId != -1) {
+                            repository.getVehicleById(currentVehicleId)?.let { vehicle ->
+                                repository.updateVehicle(
+                                    vehicle.copy(
+                                        odometerKm = newOdo,
+                                        lastUsedAt = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    dialog.dismiss()
+                }
+        }
+        dialog.show()
+    }
     private fun loadVehicleSelector() {
         lifecycleScope.launch {
             vehicleList = repository.getAllVehicles()
