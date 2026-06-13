@@ -9,6 +9,11 @@ import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class LocationService : Service() {
 
@@ -22,7 +27,7 @@ class LocationService : Service() {
         const val KEY_B_DISTANCE = "b_distance"
         const val KEY_B_MOVING_TIME = "b_moving_time"
         const val KEY_TRIP_ACTIVE = "trip_active"
-        const val MOVING_THRESHOLD_KMH = 5f
+        const val MOVING_THRESHOLD_KMH = 2.5f
         const val PAUSE_THRESHOLD_MS = 3 * 60 * 1000L
         const val TRIP_A_EXPIRY_MS = 30 * 60 * 1000L
         const val KEY_A_MAX_SPEED = "a_max_speed"
@@ -48,6 +53,13 @@ class LocationService : Service() {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState
 
+    private lateinit var repository: VehicleRepository
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var currentTripId: Int = -1
+    private var tripStartTime: Long = 0L
+    private val pendingPoints = mutableListOf<TripPoint>()
+    private var currentVehicleId: Int = -1  // kept in sync via a new setter
+
     override fun onCreate() {
         super.onCreate()
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -55,6 +67,7 @@ class LocationService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification())
         loadPersistedState()
         setupLocationUpdates()
+        repository = VehicleRepository(this)
     }
 
     private fun loadPersistedState() {
@@ -141,6 +154,19 @@ class LocationService : Service() {
                 tripA = tripA.copy(movingTimeMs = tripA.movingTimeMs + deltaMs)
                 tripB = tripB.copy(movingTimeMs = tripB.movingTimeMs + deltaMs)
             }
+            if (_uiState.value.isRunning && currentTripId != -1) {
+                pendingPoints.add(
+                    TripPoint(
+                        tripId = currentTripId,
+                        timestamp = now,
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        speedKmh = displaySpeed,
+                        accuracyM = location.accuracy
+                    )
+                )
+                if (pendingPoints.size >= 10) flushPoints()
+            }
             saveState(tripA, tripB, newOdo)
         }
 
@@ -154,13 +180,26 @@ class LocationService : Service() {
         )
     }
 
-    fun startTrip() {
+    fun startTrip(vehicleId: Int) {
+        tripStartTime = System.currentTimeMillis()
         prefs.edit().putBoolean(KEY_TRIP_ACTIVE, true).apply()
         lastLocation = null
         lastUpdateTime = 0L
         isMoving = false
         belowThresholdSince = 0L
         _uiState.value = _uiState.value.copy(isRunning = true)
+
+        serviceScope.launch {
+            val record = TripRecord(
+                vehicleId = vehicleId,
+                startTime = tripStartTime,
+                endTime = 0L,
+                distanceKm = 0.0,
+                movingTimeMs = 0L,
+                maxSpeedKmh = 0
+            )
+            currentTripId = repository.insertTripRecord(record).toInt()
+        }
     }
 
     fun stopTrip() {
@@ -171,7 +210,27 @@ class LocationService : Service() {
         isMoving = false
         belowThresholdSince = 0L
         lastLocation = null
-        _uiState.value = _uiState.value.copy(isRunning = false)
+
+        val finalState = _uiState.value
+        _uiState.value = finalState.copy(isRunning = false)
+
+        if (currentTripId != -1) {
+            flushPoints()
+            val tripId = currentTripId
+            serviceScope.launch {
+                repository.getTripRecordById(tripId)?.let { record ->
+                    repository.updateTripRecord(
+                        record.copy(
+                            endTime = System.currentTimeMillis(),
+                            distanceKm = finalState.tripA.distanceKm,
+                            movingTimeMs = finalState.tripA.movingTimeMs,
+                            maxSpeedKmh = finalState.tripA.maxSpeedKmh
+                        )
+                    )
+                }
+            }
+            currentTripId = -1
+        }
     }
 
     fun resetTripA() {
@@ -195,6 +254,14 @@ class LocationService : Service() {
             .putLong(KEY_A_STOP_TIME, 0L)
             .putInt(KEY_A_MAX_SPEED, 0)
             .apply()
+    }
+
+    private fun flushPoints() {
+        val toFlush = pendingPoints.toList()
+        pendingPoints.clear()
+        serviceScope.launch {
+            toFlush.forEach { repository.insertTripPoint(it) }
+        }
     }
 
     private fun saveState(tripA: TripData, tripB: TripData, odoKm: Double) {
@@ -259,5 +326,6 @@ class LocationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        serviceScope.cancel()
     }
 }

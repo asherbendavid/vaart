@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 
 @Dao
 interface TripRecordDao {
@@ -22,4 +23,7 @@ interface TripRecordDao {
 
     @Delete
     suspend fun deleteTripRecord(record: TripRecord)
+
+    @Update
+    suspend fun updateTripRecord(record: TripRecord)
 }

@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartStop.setOnClickListener {
             locationService?.let { svc ->
                 if (svc.uiState.value.isRunning) handleStopWithSummary()
-                else svc.startTrip()
+                else svc.startTrip(currentVehicleId)
             }
         }
         binding.btnResetA.setOnClickListener { locationService?.resetTripA() }

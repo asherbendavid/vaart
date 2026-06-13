@@ -55,4 +55,10 @@ class VehicleRepository(context: Context) {
 
     suspend fun getPointsForTrip(tripId: Int): List<TripPoint> =
         tripPointDao.getPointsForTrip(tripId)
+
+    suspend fun getTripRecordById(id: Int): TripRecord? =
+        tripRecordDao.getTripRecordById(id)
+
+    suspend fun updateTripRecord(record: TripRecord) =
+        tripRecordDao.updateTripRecord(record)
 }
