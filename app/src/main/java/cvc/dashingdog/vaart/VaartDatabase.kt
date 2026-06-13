@@ -5,10 +5,16 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Vehicle::class], version = 1, exportSchema = false)
+@Database(
+    entities = [Vehicle::class, TripRecord::class, TripPoint::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class VaartDatabase : RoomDatabase() {
 
     abstract fun vehicleDao(): VehicleDao
+    abstract fun tripRecordDao(): TripRecordDao
+    abstract fun tripPointDao(): TripPointDao
 
     companion object {
         @Volatile
@@ -20,7 +26,9 @@ abstract class VaartDatabase : RoomDatabase() {
                     context.applicationContext,
                     VaartDatabase::class.java,
                     "vaart_database"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build().also { INSTANCE = it }
             }
         }
     }

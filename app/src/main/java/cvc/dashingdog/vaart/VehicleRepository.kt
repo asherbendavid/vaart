@@ -4,8 +4,10 @@ import android.content.Context
 
 class VehicleRepository(context: Context) {
 
-    private val dao = VaartDatabase.getInstance(context).vehicleDao()
-
+    private val db = VaartDatabase.getInstance(context)
+    private val dao = db.vehicleDao()
+    private val tripRecordDao = db.tripRecordDao()
+    private val tripPointDao = db.tripPointDao()
     suspend fun getAllVehicles(): List<Vehicle> = dao.getAllVehicles()
 
     suspend fun getVehicleById(id: Int): Vehicle? = dao.getVehicleById(id)
@@ -35,4 +37,22 @@ class VehicleRepository(context: Context) {
             )
         )
     }
+
+    suspend fun insertTripRecord(record: TripRecord): Long =
+        tripRecordDao.insertTripRecord(record)
+
+    suspend fun getAllTripRecords(): List<TripRecord> =
+        tripRecordDao.getAllTripRecords()
+
+    suspend fun getTripRecordsForVehicle(vehicleId: Int): List<TripRecord> =
+        tripRecordDao.getTripRecordsForVehicle(vehicleId)
+
+    suspend fun deleteTripRecord(record: TripRecord) =
+        tripRecordDao.deleteTripRecord(record)
+
+    suspend fun insertTripPoint(point: TripPoint) =
+        tripPointDao.insertTripPoint(point)
+
+    suspend fun getPointsForTrip(tripId: Int): List<TripPoint> =
+        tripPointDao.getPointsForTrip(tripId)
 }
