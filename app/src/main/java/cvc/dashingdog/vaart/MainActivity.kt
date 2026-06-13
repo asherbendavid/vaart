@@ -173,8 +173,12 @@ class MainActivity : AppCompatActivity() {
         // New vehicle
         popup.menu.add(2, -2, vehicleList.size + 3, "New vehicle...")
 
+        // Manage vehicles
+        popup.menu.add(2, -5, vehicleList.size + 4, "Manage vehicles...")
+
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                -5 -> {showManageVehiclesDialog(); true}
                 -2 -> {
                     if (currentVehicleId == -1) {
                         val currentOdo = locationService?.uiState?.value?.odometerKm ?: 0.0
@@ -205,6 +209,165 @@ class MainActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun showManageVehiclesDialog() {
+        if (vehicleList.isEmpty()) {
+            Toast.makeText(this, "No vehicles to manage", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val names = vehicleList.map {
+            it.name + if (!it.registration.isNullOrEmpty()) " (${it.registration})" else ""
+        }.toTypedArray()
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Manage vehicles")
+            .setItems(names) { _, index -> showVehicleActionsDialog(vehicleList[index]) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showVehicleActionsDialog(vehicle: Vehicle) {
+        val title = vehicle.name +
+                if (!vehicle.registration.isNullOrEmpty()) " · ${vehicle.registration}" else ""
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(arrayOf("Edit details", "Delete vehicle")) { _, which ->
+                when (which) {
+                    0 -> showEditVehicleDialog(vehicle)
+                    1 -> showDeleteVehicleDialog(vehicle)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showEditVehicleDialog(vehicle: Vehicle) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_new_vehicle, null)
+        val etName  = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleName)
+        val etReg   = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleReg)
+        val etNotes = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleNotes)
+        val etOdo   = dialogView.findViewById<android.widget.EditText>(R.id.etVehicleOdo)
+
+        etName.setText(vehicle.name)
+        etReg.setText(vehicle.registration ?: "")
+        etNotes.setText(vehicle.notes ?: "")
+
+        val displayOdo = if (vehicle.id == currentVehicleId)
+            locationService?.uiState?.value?.odometerKm ?: vehicle.odometerKm
+        else
+            vehicle.odometerKm
+        etOdo.setText(displayOdo.toInt().toString())
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Edit Vehicle")
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener {
+                    val name = etName.text.toString().trim()
+                    if (name.isEmpty()) {
+                        etName.error = "Vehicle name is required"
+                        etName.requestFocus()
+                        return@setOnClickListener
+                    }
+                    val reg   = etReg.text.toString().trim().ifEmpty { null }
+                    val notes = etNotes.text.toString().trim().ifEmpty { null }
+                    val newOdo = etOdo.text.toString().toDoubleOrNull() ?: displayOdo
+
+                    lifecycleScope.launch {
+                        repository.updateVehicle(
+                            vehicle.copy(
+                                name = name,
+                                registration = reg,
+                                notes = notes,
+                                odometerKm = newOdo,
+                                lastUsedAt = System.currentTimeMillis()
+                            )
+                        )
+                        if (vehicle.id == currentVehicleId) {
+                            locationService?.uiState?.value?.let { state ->
+                                locationService?.loadVehicleData(newOdo, state.tripB)
+                            }
+                        }
+                        loadVehicleSelector() // refreshes vehicleList and updates button label
+                    }
+                    dialog.dismiss()
+                }
+        }
+        dialog.show()
+    }
+
+    private fun showDeleteVehicleDialog(vehicle: Vehicle) {
+        val message = if (vehicle.id == currentVehicleId)
+            "${vehicle.name} is currently active. Deleting it will switch to Anonymous mode."
+        else
+            "All data for ${vehicle.name} will be permanently deleted."
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Delete ${vehicle.name}?")
+            .setMessage(message)
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch { performDelete(vehicle) }
+            }
+            .setNeutralButton("Export & Delete") { _, _ ->
+                shareVehicleData(vehicle)
+                lifecycleScope.launch { performDelete(vehicle) }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun shareVehicleData(vehicle: Vehicle) {
+        val tripB = TripData(
+            distanceKm    = vehicle.tripBDistanceKm,
+            movingTimeMs  = vehicle.tripBMovingTimeMs,
+            maxSpeedKmh   = vehicle.tripBMaxSpeedKmh
+        )
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            .format(java.util.Date())
+
+        val text = buildString {
+            appendLine("Vaart Vehicle Export — $date")
+            appendLine()
+            appendLine("Name: ${vehicle.name}")
+            vehicle.registration?.let { appendLine("Registration: $it") }
+            vehicle.notes?.let      { appendLine("Notes: $it") }
+            appendLine()
+            appendLine("Odometer: ${vehicle.odometerKm.toInt()} km")
+            appendLine()
+            appendLine("Trip B:")
+            appendLine("  Distance:  ${tripB.formattedDistance}")
+            appendLine("  Time:      ${tripB.formattedTime}")
+            appendLine("  Avg speed: ${if (tripB.movingTimeMs > 0) "${tripB.avgSpeedKmh} km/h" else "--"}")
+            appendLine("  Max speed: ${if (tripB.maxSpeedKmh > 0) "${tripB.maxSpeedKmh} km/h" else "--"}")
+        }
+
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "Vaart — ${vehicle.name}")
+                    putExtra(Intent.EXTRA_TEXT, text)
+                },
+                "Export vehicle data"
+            )
+        )
+    }
+
+    private suspend fun performDelete(vehicle: Vehicle) {
+        repository.deleteVehicle(vehicle)
+        if (vehicle.id == currentVehicleId) {
+            locationService?.resetForAnonymous()
+            currentVehicleId = -1
+            saveActiveVehicleId()
+        }
+        loadVehicleSelector()
     }
 
     private fun handleVehicleSelected(vehicleId: Int) {
@@ -253,7 +416,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performVehicleCorrection(newVehicle: Vehicle) {
-        // Phase 5
+        // Phase 4
     }
 
     private fun showNewVehicleDialog(prefilledOdo: Double = 0.0, prefilledFromAnonymous: Boolean = false) {
@@ -290,6 +453,7 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     lifecycleScope.launch {
+                        saveCurrentVehicleData() // saves old vehicle before switching; no-op if anonymous
                         val newVehicle = Vehicle(
                             name = name,
                             registration = reg,
@@ -304,6 +468,15 @@ class MainActivity : AppCompatActivity() {
                         )
                         val newId = repository.saveVehicle(newVehicle)
                         currentVehicleId = newId.toInt()
+                        saveActiveVehicleId()
+                        locationService?.loadVehicleData(
+                            odo,
+                            TripData(
+                                distanceKm = newVehicle.tripBDistanceKm,
+                                movingTimeMs = newVehicle.tripBMovingTimeMs,
+                                maxSpeedKmh = newVehicle.tripBMaxSpeedKmh
+                            )
+                        )
                         loadVehicleSelector()
                     }
                     dialog.dismiss()
