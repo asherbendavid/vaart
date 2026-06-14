@@ -21,7 +21,14 @@ class TripHistoryAdapter(
         val binding = ItemTripBinding.inflate(
             LayoutInflater.from(parent.context), parent, false
         )
-        return ViewHolder(binding)
+        val holder = ViewHolder(binding)
+        binding.root.setOnClickListener {
+            val record = records[holder.adapterPosition]
+            val intent = android.content.Intent(parent.context, TripMapActivity::class.java)
+            intent.putExtra(TripMapActivity.EXTRA_TRIP_ID, record.id)
+            parent.context.startActivity(intent)
+        }
+        return holder
     }
 
     override fun getItemCount() = records.size
