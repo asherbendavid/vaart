@@ -46,6 +46,20 @@
         android:textColor="#888888"
         android:backgroundTint="#1C1C2E"
         android:layout_marginTop="8dp"
+        android:layout_marginEnd="4dp"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btnMenu"/>
+
+    <Button
+        android:id="@+id/btnMenu"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:text="☰"
+        android:textSize="16sp"
+        android:textColor="#888888"
+        android:backgroundTint="#1C1C2E"
+        android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
         style="@style/Widget.AppCompat.Button.Borderless"
         app:layout_constraintTop_toTopOf="parent"

@@ -19,6 +19,7 @@ import cvc.dashingdog.vaart.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.res.ColorStateList.valueOf
+import android.widget.PopupMenu
 import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnResetA.setOnClickListener { locationService?.resetTripA() }
         binding.btnResetB.setOnClickListener { locationService?.resetTripB() }
+        binding.btnMenu.setOnClickListener { showMainMenu() }
         binding.btnHud.setOnClickListener {
             isHudMode = !isHudMode
             applyHudMode()
@@ -89,6 +91,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showMainMenu() {
+        val popup = PopupMenu(this, binding.btnMenu)
+        popup.menu.add(0, 1, 0, "Trip history")
+        // Settings and About will be added here later
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> { startActivity(Intent(this, TripHistoryActivity::class.java)); true }
+                else -> false
+            }
+        }
+        popup.show()
+    }
     private fun showStandaloneOdoUpdateDialog(state: UiState) {
         val vehicleName = if (currentVehicleId == -1) "Anonymous"
         else vehicleList.find { it.id == currentVehicleId }?.name ?: "Anonymous"
@@ -745,6 +759,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnResetA.isEnabled = !isHudMode
         binding.btnResetB.isEnabled = !isHudMode
         //binding.btnHud.textColor  // optional visual feedback
+        binding.btnMenu.isEnabled = !isHudMode
         binding.btnHud.setTextColor(
             if (isHudMode) Color.parseColor("#F59E0B")
             else Color.parseColor("#888888")
