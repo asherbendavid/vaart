@@ -19,8 +19,10 @@ import cvc.dashingdog.vaart.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.res.ColorStateList.valueOf
+import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.savedstate.serialization.saved
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var vehicleList: List<Vehicle> = emptyList()
     private lateinit var repository: VehicleRepository
     private var isVehicleCorrectionInProgress = false
+    private var stateObserverStarted = false
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -43,7 +46,9 @@ class MainActivity : AppCompatActivity() {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             locationService = (binder as LocationService.LocalBinder).getService()
             isBound = true
-            observeState()
+            if (!stateObserverStarted){
+                observeState()
+            }
             loadActiveVehicle()
         }
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -131,7 +136,7 @@ class MainActivity : AppCompatActivity() {
                         return@setOnClickListener
                     }
                     lifecycleScope.launch {
-                        locationService?.loadVehicleData(newOdo, state.tripB)
+                        locationService?.loadVehicleData(currentVehicleId, newOdo, state.tripB)
                         if (currentVehicleId != -1) {
                             repository.getVehicleById(currentVehicleId)?.let { vehicle ->
                                 repository.updateVehicle(
@@ -306,7 +311,7 @@ class MainActivity : AppCompatActivity() {
                         )
                         if (vehicle.id == currentVehicleId) {
                             locationService?.uiState?.value?.let { state ->
-                                locationService?.loadVehicleData(newOdo, state.tripB)
+                                locationService?.loadVehicleData(vehicle.id, newOdo, state.tripB)
                             }
                         }
                         loadVehicleSelector() // refreshes vehicleList and updates button label
@@ -411,6 +416,7 @@ class MainActivity : AppCompatActivity() {
                             if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
                             isVehicleCorrectionInProgress = false
                             locationService?.loadVehicleData(
+                                newVehicle.id,
                                confirmedVehicle.odometerKm,
                                TripData(
                                   distanceKm = newVehicle.tripBDistanceKm,
@@ -484,6 +490,7 @@ class MainActivity : AppCompatActivity() {
                         currentVehicleId = newId.toInt()
                         saveActiveVehicleId()
                         locationService?.loadVehicleData(
+                            newId.toInt(),
                             odo,
                             TripData(
                                 distanceKm = newVehicle.tripBDistanceKm,
@@ -513,14 +520,7 @@ class MainActivity : AppCompatActivity() {
             val vehicle = repository.getVehicleById(savedId)
             if (vehicle != null) {
                 currentVehicleId = savedId
-                locationService?.loadVehicleData(
-                    vehicle.odometerKm,
-                    TripData(
-                        distanceKm = vehicle.tripBDistanceKm,
-                        movingTimeMs = vehicle.tripBMovingTimeMs,
-                        maxSpeedKmh = vehicle.tripBMaxSpeedKmh
-                    )
-                )
+                locationService?.setActiveVehicleId(savedId)
                 updateVehicleSelectorButton()
             } else {
                 // vehicle was deleted externally, fall back to anonymous
@@ -603,12 +603,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleStopWithSummary() {
         val svc = locationService ?: return
-        val tripA = svc.uiState.value.tripA
+        val thisSessionData = svc.getSessionData()
         val vehicle = vehicleList.find { it.id == currentVehicleId }
         val vehicleName = vehicle?.name ?: "Anonymous"
         val vehicleReg = vehicle?.registration
         svc.stopTrip()
-        showSessionSummaryDialog(tripA, vehicleName, vehicleReg)
+        showSessionSummaryDialog(thisSessionData, vehicleName, vehicleReg)
     }
 
     private fun showSessionSummaryDialog(tripA: TripData, vehicleName: String, vehicleReg: String?) {
@@ -679,6 +679,16 @@ class MainActivity : AppCompatActivity() {
         // Speed
         binding.tvSpeed.text = if (state.speedKmh == 0 && state.gpsAccuracy == 0f)
             "--" else state.speedKmh.toString()
+
+        // Overspeed color additions
+        binding.tvSpeed.setTextColor(
+            if (state.isOverspeed)
+                android.graphics.Color.parseColor("#FF4444")
+            else
+                android.graphics.Color.WHITE
+        )
+        binding.vMaxSpeedLine.visibility =
+            if (state.isOverspeed) View.VISIBLE else View.INVISIBLE
 
         // Odometer
         binding.tvOdometer.text = formatOdometer(state.odometerKm)

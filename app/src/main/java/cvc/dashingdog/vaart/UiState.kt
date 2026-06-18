@@ -6,5 +6,6 @@ data class UiState(
     val isRunning: Boolean = false,
     val tripA: TripData = TripData(),
     val tripB: TripData = TripData(),
-    val odometerKm: Double = 0.0
+    val odometerKm: Double = 0.0,
+    val isOverspeed: Boolean = false
 )

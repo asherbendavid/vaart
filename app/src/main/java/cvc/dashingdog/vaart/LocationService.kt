@@ -14,6 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import android.media.AudioAttributes
+import android.media.SoundPool
+import android.os.Handler
+import android.os.Looper
 
 class LocationService : Service() {
 
@@ -34,6 +38,9 @@ class LocationService : Service() {
         const val KEY_B_MAX_SPEED = "b_max_speed"
         const val KEY_ODO_DISTANCE = "odo_distance"
         const val KEY_ACTIVE_VEHICLE_ID = "active_vehicle_id"
+        const val OVERSPEED_THRESHOLD_KMH = 90f // change speed limit here
+        private const val ALERT_BURST_INTERVAL_MS = 600L
+        private const val ALERT_REPEAT_MS = 60_000L
     }
 
     inner class LocalBinder : Binder() {
@@ -59,6 +66,14 @@ class LocationService : Service() {
     private var tripStartTime: Long = 0L
     private val pendingPoints = mutableListOf<TripPoint>()
     private var currentVehicleId: Int = -1  // kept in sync via a new setter
+    private lateinit var soundPool: SoundPool
+    private var alertSoundId: Int = 0
+    private val alertHandler = Handler(Looper.getMainLooper())
+    private var lastAlertTime = 0L
+    private var alertBurstCount = 0
+    private var sessionDistanceKm: Double = 0.0
+    private var sessionMovingTimeMs: Long = 0L
+    private var sessionMaxSpeedKmh: Int = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -66,6 +81,15 @@ class LocationService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         loadPersistedState()
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(3)  // allow 3 simultaneous plays for the overlap
+            .setAudioAttributes(audioAttributes)
+            .build()
+        alertSoundId = soundPool.load(this, R.raw.overspeed_alert, 1)
         setupLocationUpdates()
         repository = VehicleRepository(this)
     }
@@ -140,6 +164,8 @@ class LocationService : Service() {
         if (_uiState.value.isRunning && lastLocation != null && deltaMs > 0) {
             if (speedKmhFloat >= MOVING_THRESHOLD_KMH) {
                 val distKm = lastLocation!!.distanceTo(location) / 1000.0
+                sessionDistanceKm += distKm
+                sessionMaxSpeedKmh = maxOf(sessionMaxSpeedKmh, displaySpeed)
                 tripA = tripA.copy(
                     distanceKm = tripA.distanceKm + distKm,
                     maxSpeedKmh = maxOf(tripA.maxSpeedKmh, displaySpeed)
@@ -151,6 +177,7 @@ class LocationService : Service() {
                 newOdo = _uiState.value.odometerKm + distKm
             }
             if (isMoving) {
+                sessionMovingTimeMs += deltaMs
                 tripA = tripA.copy(movingTimeMs = tripA.movingTimeMs + deltaMs)
                 tripB = tripB.copy(movingTimeMs = tripB.movingTimeMs + deltaMs)
             }
@@ -170,17 +197,24 @@ class LocationService : Service() {
             saveState(tripA, tripB, newOdo)
         }
 
+        val isOverSpeed = _uiState.value.isRunning && speedKmhFloat > OVERSPEED_THRESHOLD_KMH
+        if (isOverSpeed) triggerOverspeedAlert()
         lastLocation = location
         _uiState.value = _uiState.value.copy(
             speedKmh = displaySpeed,
             gpsAccuracy = location.accuracy,
             tripA = tripA,
             tripB = tripB,
-            odometerKm = newOdo
+            odometerKm = newOdo,
+            isOverspeed = isOverSpeed
         )
     }
 
     fun startTrip(vehicleId: Int) {
+        currentVehicleId = vehicleId
+        sessionDistanceKm = 0.0
+        sessionMaxSpeedKmh = 0
+        sessionMovingTimeMs = 0L
         tripStartTime = System.currentTimeMillis()
         prefs.edit().putBoolean(KEY_TRIP_ACTIVE, true).apply()
         lastLocation = null
@@ -222,9 +256,9 @@ class LocationService : Service() {
                     repository.updateTripRecord(
                         record.copy(
                             endTime = System.currentTimeMillis(),
-                            distanceKm = finalState.tripA.distanceKm,
-                            movingTimeMs = finalState.tripA.movingTimeMs,
-                            maxSpeedKmh = finalState.tripA.maxSpeedKmh
+                            distanceKm = sessionDistanceKm,
+                            movingTimeMs = sessionMovingTimeMs,
+                            maxSpeedKmh = sessionMaxSpeedKmh
                         )
                     )
                 }
@@ -245,6 +279,13 @@ class LocationService : Service() {
             .putInt(KEY_B_MAX_SPEED, 0)
             .apply()
         _uiState.value = _uiState.value.copy(tripB = TripData())
+        if (currentVehicleId != -1) {
+            serviceScope.launch {
+                repository.getVehicleById(currentVehicleId)?.let { vehicle ->
+                    repository.saveTripB(vehicle, TripData())
+                }
+            }
+        }
     }
 
     private fun clearTripAPrefs() {
@@ -301,7 +342,8 @@ class LocationService : Service() {
             .build()
     }
 
-    fun loadVehicleData(odometerKm: Double, tripB: TripData) {
+    fun loadVehicleData(vehicleId: Int, odometerKm: Double, tripB: TripData) {
+        currentVehicleId = vehicleId
         lastLocation = null // prevent phantom distance on switch
         val current = _uiState.value
         _uiState.value = current.copy(
@@ -312,6 +354,7 @@ class LocationService : Service() {
     }
 
     fun resetForAnonymous() {
+        currentVehicleId = -1
         lastLocation = null
         val current = _uiState.value
         _uiState.value = current.copy(
@@ -321,11 +364,43 @@ class LocationService : Service() {
         saveState(current.tripA, TripData(), 0.0)
     }
 
+    fun setActiveVehicleId(vehicleId: Int){
+        currentVehicleId = vehicleId
+    }
+
+    private val burstRunnable = object : Runnable {
+        override fun run() {
+            if (alertBurstCount < 3) {
+                soundPool.play(alertSoundId, 1f, 1f, 0, 0, 1f)
+                alertBurstCount++
+                alertHandler.postDelayed(this, ALERT_BURST_INTERVAL_MS)
+            }
+        }
+    }
+
+    fun getSessionData(): TripData = TripData(
+        distanceKm  = sessionDistanceKm,
+        movingTimeMs = sessionMovingTimeMs,
+        maxSpeedKmh = sessionMaxSpeedKmh
+    )
+
+    private fun triggerOverspeedAlert() {
+        if (!_uiState.value.isRunning) return // Disable overspeed warnings while not in active sesstion
+        val now = System.currentTimeMillis()
+        if (now - lastAlertTime < ALERT_REPEAT_MS) return
+        lastAlertTime = now
+        alertBurstCount = 0
+        alertHandler.removeCallbacks(burstRunnable)
+        alertHandler.post(burstRunnable)
+    }
+
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onDestroy() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         serviceScope.cancel()
+        alertHandler.removeCallbacksAndMessages(null)
+        soundPool.release()
     }
 }
