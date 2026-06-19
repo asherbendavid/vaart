@@ -741,9 +741,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        val isRunning = locationService?.uiState?.value?.isRunning ?: false
         if (isBound) {
             unbindService(serviceConnection)
             isBound = false
+        }
+        if (!isRunning) {
+            stopService(Intent(this, LocationService::class.java))
         }
     }
 
