@@ -74,6 +74,11 @@ class LocationService : Service() {
     private var sessionDistanceKm: Double = 0.0
     private var sessionMovingTimeMs: Long = 0L
     private var sessionMaxSpeedKmh: Int = 0
+    private lateinit var speedLimitManager: SpeedLimitManager
+    private var locationUpdateCounter = 0
+    private var currentMaxSpeedLimit: Int? = null
+    private var currentMinSpeedLimit: Int? = null
+    private var wasUnderspeed = false
 
     override fun onCreate() {
         super.onCreate()
@@ -92,6 +97,7 @@ class LocationService : Service() {
         alertSoundId = soundPool.load(this, R.raw.overspeed_alert, 1)
         setupLocationUpdates()
         repository = VehicleRepository(this)
+        speedLimitManager = SpeedLimitManager(this)
     }
 
     private fun loadPersistedState() {
@@ -197,8 +203,27 @@ class LocationService : Service() {
             saveState(tripA, tripB, newOdo)
         }
 
-        val isOverSpeed = _uiState.value.isRunning && speedKmhFloat > OVERSPEED_THRESHOLD_KMH
+        locationUpdateCounter++
+        if (locationUpdateCounter % 3 == 0) {
+            val lat = location.latitude
+            val lon = location.longitude
+            serviceScope.launch {
+                speedLimitManager.ensureTileCached(lat, lon)
+                val (maxLimit, minLimit) = speedLimitManager.lookupSpeedLimits(lat, lon)
+                currentMaxSpeedLimit = maxLimit
+                currentMinSpeedLimit = minLimit
+            }
+        }
+
+        val isOverSpeed = _uiState.value.isRunning &&
+                currentMaxSpeedLimit != null && speedKmhFloat > currentMaxSpeedLimit!!
         if (isOverSpeed) triggerOverspeedAlert()
+
+        val isUnderSpeed = _uiState.value.isRunning &&
+                currentMinSpeedLimit != null && speedKmhFloat < currentMinSpeedLimit!!
+        if (isUnderSpeed && !wasUnderspeed) triggerUnderspeedAlert()
+        wasUnderspeed = isUnderSpeed
+
         lastLocation = location
         _uiState.value = _uiState.value.copy(
             speedKmh = displaySpeed,
@@ -206,8 +231,12 @@ class LocationService : Service() {
             tripA = tripA,
             tripB = tripB,
             odometerKm = newOdo,
-            isOverspeed = isOverSpeed
+            isOverspeed = isOverSpeed,
+            isUnderspeed = isUnderSpeed,
+            maxSpeedLimitKmh = currentMaxSpeedLimit,
+            minSpeedLimitKmh = currentMinSpeedLimit
         )
+
     }
 
     fun startTrip(vehicleId: Int) {
@@ -392,6 +421,10 @@ class LocationService : Service() {
         alertBurstCount = 0
         alertHandler.removeCallbacks(burstRunnable)
         alertHandler.post(burstRunnable)
+    }
+
+    private fun triggerUnderspeedAlert() {
+        soundPool.play(alertSoundId, 1f, 1f, 0, 0, 1f)
     }
 
     override fun onBind(intent: Intent): IBinder = binder

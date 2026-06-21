@@ -680,15 +680,20 @@ class MainActivity : AppCompatActivity() {
         binding.tvSpeed.text = if (state.speedKmh == 0 && state.gpsAccuracy == 0f)
             "--" else state.speedKmh.toString()
 
-        // Overspeed color additions
+        // Overspeed / Underspeed color additions
         binding.tvSpeed.setTextColor(
-            if (state.isOverspeed)
-                android.graphics.Color.parseColor("#FF4444")
-            else
-                android.graphics.Color.WHITE
+            when {
+                state.isOverspeed -> android.graphics.Color.parseColor("#FF4444")
+                state.isUnderspeed -> android.graphics.Color.parseColor("#F59E0B")
+                else -> android.graphics.Color.WHITE
+            }
         )
-        binding.vMaxSpeedLine.visibility =
-            if (state.isOverspeed) View.VISIBLE else View.INVISIBLE
+        binding.vMaxSpeedLine.visibility = if (state.isOverspeed) View.VISIBLE else View.INVISIBLE
+        binding.vMinSpeedLine.visibility = if (state.isUnderspeed) View.VISIBLE else View.INVISIBLE
+
+        binding.tvMaxSpeedSign.text = state.maxSpeedLimitKmh?.toString() ?: "--"
+        binding.tvMinSpeedSign.text = state.minSpeedLimitKmh?.toString() ?: ""
+        binding.tvMinSpeedSign.visibility = if (state.minSpeedLimitKmh != null) View.VISIBLE else View.INVISIBLE
 
         // Odometer
         binding.tvOdometer.text = formatOdometer(state.odometerKm)
@@ -707,8 +712,8 @@ class MainActivity : AppCompatActivity() {
         // START/STOP button
         binding.btnStartStop.text = if (state.isRunning) "STOP" else "START"
         binding.btnStartStop.backgroundTintList = valueOf(
-            if (state.isRunning) Color.parseColor("#EF4444")
-            else Color.parseColor("#22C55E")
+            if (state.isRunning) Color.parseColor("#450E0E")
+            else Color.parseColor("#0E4520")
         )
 
         // Trip A

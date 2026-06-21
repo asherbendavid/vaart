@@ -6,8 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Vehicle::class, TripRecord::class, TripPoint::class],
-    version = 2,
+    entities = [
+        Vehicle::class,
+        TripRecord::class,
+        TripPoint::class,
+        SpeedLimitWay::class,
+        QueriedTile::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class VaartDatabase : RoomDatabase() {
@@ -15,6 +21,8 @@ abstract class VaartDatabase : RoomDatabase() {
     abstract fun vehicleDao(): VehicleDao
     abstract fun tripRecordDao(): TripRecordDao
     abstract fun tripPointDao(): TripPointDao
+    abstract fun speedLimitWayDao(): SpeedLimitWayDao
+    abstract fun queriedTileDao(): QueriedTileDao
 
     companion object {
         @Volatile
