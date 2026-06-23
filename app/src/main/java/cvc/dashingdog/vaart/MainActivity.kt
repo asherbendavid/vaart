@@ -23,6 +23,12 @@ import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.savedstate.serialization.saved
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.animation.ValueAnimator
+import android.graphics.drawable.GradientDrawable
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,6 +41,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: VehicleRepository
     private var isVehicleCorrectionInProgress = false
     private var stateObserverStarted = false
+    private var batteryPulseAnimator: ValueAnimator? = null
+    private val tickReceiver = object: BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when(intent?.action){
+                Intent.ACTION_TIME_TICK, Intent.ACTION_TIME_CHANGED -> updateClock()
+                Intent.ACTION_BATTERY_CHANGED -> intent.let {updateBattery(it)}
+            }
+        }
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -61,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        updateClock()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding.btnStartStop.setOnClickListener {
@@ -99,10 +115,11 @@ class MainActivity : AppCompatActivity() {
     private fun showMainMenu() {
         val popup = PopupMenu(this, binding.btnMenu)
         popup.menu.add(0, 1, 0, "Trip history")
-        // Settings and About will be added here later
+        popup.menu.add(0, 2, 1, "Settings")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> { startActivity(Intent(this, TripHistoryActivity::class.java)); true }
+                2 -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
                 else -> false
             }
         }
@@ -739,6 +756,71 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun updateClock() {
+        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        binding.tvClock.text = fmt.format(java.util.Date())
+    }
+
+    private fun updateBattery(intent: Intent) {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        if (level == -1 || scale == -1) return
+
+        val pct = (level * 100) / scale
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL
+
+        binding.tvBatteryPct.text = "$pct%"
+
+        val segments = listOf(binding.segBattery1, binding.segBattery2, binding.segBattery3)
+
+        val (litCount, color) = when {
+            isCharging -> Pair(((pct + 32) / 33).coerceIn(1, 3), Color.parseColor("#3B82F6"))
+            pct > 75 -> Pair(3, Color.parseColor("#22C55E"))
+            pct > 50 -> Pair(2, Color.parseColor("#F59E0B"))
+            pct > 25 -> Pair(1, Color.parseColor("#EF4444"))
+            else -> Pair(0, Color.parseColor("#EF4444"))
+        }
+
+        segments.forEachIndexed { index, seg ->
+            seg.backgroundTintList = valueOf(
+                if (index < litCount) color else Color.parseColor("#333333")
+            )
+        }
+
+        binding.tvBatteryPct.setTextColor(
+            if (pct <= 25 && !isCharging) Color.WHITE else Color.parseColor("#888888")
+        )
+
+        if (pct <= 25 && !isCharging) startBatteryPulse() else stopBatteryPulse()
+    }
+
+    private fun startBatteryPulse() {
+        if (batteryPulseAnimator?.isRunning == true) return
+        val shellBg = (binding.batteryShell.background.mutate() as GradientDrawable)
+        binding.batteryShell.background = shellBg
+        val segments = listOf(binding.segBattery1, binding.segBattery2, binding.segBattery3)
+
+        batteryPulseAnimator = ValueAnimator.ofInt(20, 220).apply {
+            duration = 700
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                val alpha = anim.animatedValue as Int
+                val flashColor = Color.argb(alpha, 0xEF, 0x44, 0x44)
+                shellBg.setColor(flashColor)
+                segments.forEach { it.backgroundTintList = valueOf(flashColor) }
+            }
+            start()
+        }
+    }
+
+    private fun stopBatteryPulse() {
+        batteryPulseAnimator?.cancel()
+        batteryPulseAnimator = null
+        (binding.batteryShell.background as? GradientDrawable)?.setColor(Color.TRANSPARENT)
+    }
     override fun onResume() {
         super.onResume()
         loadVehicleSelector()
@@ -746,6 +828,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        unregisterReceiver(tickReceiver)
+        stopBatteryPulse()
         val isRunning = locationService?.uiState?.value?.isRunning ?: false
         if (isBound) {
             unbindService(serviceConnection)
@@ -758,6 +842,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        registerReceiver(tickReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+        })
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED && !isBound

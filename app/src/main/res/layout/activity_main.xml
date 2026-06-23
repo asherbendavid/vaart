@@ -36,6 +36,62 @@
         app:layout_constraintStart_toEndOf="@id/tvGpsStatus"
         app:layout_constraintTop_toTopOf="parent"/>
 
+    <!-- Battery indicator -->
+    <LinearLayout
+        android:id="@+id/batteryShell"
+        android:layout_width="wrap_content"
+        android:layout_height="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:background="@drawable/battery_shell"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="12dp"
+        app:layout_constraintStart_toEndOf="@id/vGpsIndicator"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <View
+            android:id="@+id/segBattery1"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginEnd="1dp"
+            android:background="@drawable/battery_segment"/>
+
+        <View
+            android:id="@+id/segBattery2"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginEnd="1dp"
+            android:background="@drawable/battery_segment"/>
+
+        <View
+            android:id="@+id/segBattery3"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:background="@drawable/battery_segment"/>
+    </LinearLayout>
+
+    <View
+        android:id="@+id/batteryNub"
+        android:layout_width="2dp"
+        android:layout_height="5dp"
+        android:background="@drawable/battery_nub"
+        app:layout_constraintStart_toEndOf="@id/batteryShell"
+        app:layout_constraintTop_toTopOf="@id/batteryShell"
+        app:layout_constraintBottom_toBottomOf="@id/batteryShell"/>
+
+    <TextView
+        android:id="@+id/tvBatteryPct"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#888888"
+        android:textSize="11sp"
+        android:layout_marginStart="4dp"
+        app:layout_constraintStart_toEndOf="@id/batteryNub"
+        app:layout_constraintTop_toTopOf="@id/tvGpsStatus"/>
+
     <!-- Speed display -->
     <Button
         android:id="@+id/btnHud"
@@ -215,6 +271,24 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="@id/guideline"
         app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/tvClock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="--:--"
+            android:textColor="#BBBBBB"
+            android:textSize="30sp"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:paddingTop="4dp"
+            android:paddingBottom="10dp"/>
+
+        <!-- Horizontal Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1C1C2E"/>
 
         <!-- Trip A -->
         <LinearLayout

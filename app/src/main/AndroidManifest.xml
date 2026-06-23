@@ -37,6 +37,10 @@
             android:name=".TripMapActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
+        <activity
+            android:name=".SettingsActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
         <service
             android:name=".LocationService"
             android:foregroundServiceType="location"
