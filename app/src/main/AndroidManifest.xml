@@ -40,6 +40,8 @@
         <activity
             android:name=".SettingsActivity"
             android:screenOrientation="portrait"
+            android:theme="@style/Theme.Vaart.Standard"
+            android:parentActivityName=".MainActivity"
             android:exported="false" />
         <service
             android:name=".LocationService"

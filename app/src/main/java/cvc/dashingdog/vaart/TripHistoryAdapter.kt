@@ -36,6 +36,7 @@ class TripHistoryAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val record = records[position]
         val b = holder.binding
+        val context = holder.binding.root.context
 
         // Vehicle name
         when {
@@ -58,19 +59,22 @@ class TripHistoryAdapter(
             .format(Date(record.startTime))
 
         // Distance
-        b.tvDistance.text = "%.1f km".format(record.distanceKm)
+        b.tvDistance.text = SpeedUnitFormatter.formatDistance(context, record.distanceKm)
 
         // Duration
         val s = record.movingTimeMs / 1000
         b.tvDuration.text = "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
 
         // Avg speed
+        val unit = SpeedUnitFormatter.unitLabel(context)
         val avg = if (record.movingTimeMs > 0)
             (record.distanceKm / (record.movingTimeMs / 3_600_000.0)).toInt()
         else 0
-        b.tvAvgSpeed.text = if (avg > 0) "$avg km/h avg" else "-- avg"
+        b.tvAvgSpeed.text = if (avg > 0)
+            "${SpeedUnitFormatter.formatSpeed(context, avg)} $unit avg" else "-- avg"
 
         // Max speed
-        b.tvMaxSpeed.text = if (record.maxSpeedKmh > 0) "${record.maxSpeedKmh} km/h max" else "-- max"
+        b.tvMaxSpeed.text = if (record.maxSpeedKmh > 0)
+            "${SpeedUnitFormatter.formatSpeed(context, record.maxSpeedKmh)} $unit max" else "-- max"
     }
 }

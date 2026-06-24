@@ -82,7 +82,7 @@ class TripMapActivity : AppCompatActivity() {
             binding.tvDetailVehicle.setTypeface(null, Typeface.ITALIC)
         }
 
-        binding.tvDetailDistance.text = "%.1f km".format(record.distanceKm)
+        binding.tvDetailDistance.text = SpeedUnitFormatter.formatDistance(this, record.distanceKm)
 
         val startStr = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
             .format(Date(record.startTime))
@@ -94,11 +94,13 @@ class TripMapActivity : AppCompatActivity() {
         binding.tvDetailDuration.text = "Moving time: %d:%02d:%02d"
             .format(s / 3600, (s % 3600) / 60, s % 60)
 
+        val unit = SpeedUnitFormatter.unitLabel(this)
         val avg = if (record.movingTimeMs > 0)
             (record.distanceKm / (record.movingTimeMs / 3_600_000.0)).toInt() else 0
-        binding.tvDetailAvg.text = if (avg > 0) "Avg speed: $avg km/h" else "Avg speed: --"
+        binding.tvDetailAvg.text = if (avg > 0)
+            "Avg speed: ${SpeedUnitFormatter.formatSpeed(this, avg)} $unit" else "Avg speed: --"
         binding.tvDetailMax.text = if (record.maxSpeedKmh > 0)
-            "Max speed: ${record.maxSpeedKmh} km/h" else "Max speed: --"
+            "Max speed: ${SpeedUnitFormatter.formatSpeed(this, record.maxSpeedKmh)} $unit" else "Max speed: --"
     }
 
     private fun setupMap(points: List<TripPoint>) {

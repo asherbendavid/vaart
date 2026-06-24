@@ -29,6 +29,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.animation.ValueAnimator
 import android.graphics.drawable.GradientDrawable
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private var isVehicleCorrectionInProgress = false
     private var stateObserverStarted = false
     private var batteryPulseAnimator: ValueAnimator? = null
+    private val prefs by lazy {getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)}
     private val tickReceiver = object: BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when(intent?.action){
@@ -526,7 +528,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadActiveVehicle() {
-        val prefs = getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)
+        //val prefs = getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)
         val savedId = prefs.getInt(LocationService.KEY_ACTIVE_VEHICLE_ID, -1)
         if (savedId == -1) {
             currentVehicleId = -1
@@ -630,12 +632,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSessionSummaryDialog(tripA: TripData, vehicleName: String, vehicleReg: String?) {
         val regLine = if (!vehicleReg.isNullOrEmpty()) "\nRegistration: $vehicleReg" else ""
+        val unit = speedUnitLabel()
         val message = buildString {
             append("Vehicle: $vehicleName$regLine\n\n")
-            append("Distance:  ${tripA.formattedDistance}\n")
+            append("Distance:  ${formatDistance(tripA.distanceKm)}\n")
             append("Time:      ${tripA.formattedTime}\n")
-            append("Avg speed: ${if (tripA.movingTimeMs > 0) "${tripA.avgSpeedKmh} km/h" else "--"}\n")
-            append("Max speed: ${if (tripA.maxSpeedKmh > 0) "${tripA.maxSpeedKmh} km/h" else "--"}")
+            append("Avg speed: ${if (tripA.movingTimeMs > 0) "${formatSpeed(tripA.avgSpeedKmh)} $unit" else "--"}\n")
+            append("Max speed: ${if (tripA.maxSpeedKmh > 0) "${formatSpeed(tripA.maxSpeedKmh)} $unit" else "--"}")
         }
 
         val changeEnabled = false /* disabled until phase 5 when {
@@ -695,7 +698,9 @@ class MainActivity : AppCompatActivity() {
     private fun updateUi(state: UiState) {
         // Speed
         binding.tvSpeed.text = if (state.speedKmh == 0 && state.gpsAccuracy == 0f)
-            "--" else state.speedKmh.toString()
+            "--" else formatSpeed(state.speedKmh)
+
+        binding.tvUnit.text = speedUnitLabel()
 
         // Overspeed / Underspeed color additions
         binding.tvSpeed.setTextColor(
@@ -708,12 +713,12 @@ class MainActivity : AppCompatActivity() {
         binding.vMaxSpeedLine.visibility = if (state.isOverspeed) View.VISIBLE else View.INVISIBLE
         binding.vMinSpeedLine.visibility = if (state.isUnderspeed) View.VISIBLE else View.INVISIBLE
 
-        binding.tvMaxSpeedSign.text = state.maxSpeedLimitKmh?.toString() ?: "--"
-        binding.tvMinSpeedSign.text = state.minSpeedLimitKmh?.toString() ?: ""
+        binding.tvMaxSpeedSign.text = state.maxSpeedLimitKmh?.let { formatSpeed(it) } ?: "--"
+        binding.tvMinSpeedSign.text = state.minSpeedLimitKmh?.let { formatSpeed(it) } ?: ""
         binding.tvMinSpeedSign.visibility = if (state.minSpeedLimitKmh != null) View.VISIBLE else View.INVISIBLE
 
         // Odometer
-        binding.tvOdometer.text = formatOdometer(state.odometerKm)
+        binding.tvOdometer.text = SpeedUnitFormatter.formatOdometer(this,state.odometerKm)
 
         // GPS indicator
         val (color, label) = when {
@@ -734,20 +739,20 @@ class MainActivity : AppCompatActivity() {
         )
 
         // Trip A
-        binding.tvDistA.text = state.tripA.formattedDistance
+        binding.tvDistA.text = formatDistance(state.tripA.distanceKm)
         binding.tvTimeA.text = state.tripA.formattedTime
         binding.tvAvgA.text = if (state.tripA.movingTimeMs > 0)
-            "${state.tripA.avgSpeedKmh} km/h avg" else "-- km/h avg"
+            "${formatSpeed(state.tripA.avgSpeedKmh)} ${speedUnitLabel()} avg" else "-- ${speedUnitLabel()} avg"
         binding.tvMaxA.text = if (state.tripA.maxSpeedKmh > 0)
-            "${state.tripA.maxSpeedKmh} km/h max" else "-- km/h max"
+            "${formatSpeed(state.tripA.maxSpeedKmh)} ${speedUnitLabel()} max" else "-- ${speedUnitLabel()} max"
 
         // Trip B
-        binding.tvDistB.text = state.tripB.formattedDistance
+        binding.tvDistB.text = formatDistance(state.tripB.distanceKm)
         binding.tvTimeB.text = state.tripB.formattedTime
         binding.tvAvgB.text = if (state.tripB.movingTimeMs > 0)
-            "${state.tripB.avgSpeedKmh} km/h avg" else "-- km/h avg"
+            "${formatSpeed(state.tripB.avgSpeedKmh)} ${speedUnitLabel()} avg" else "-- ${speedUnitLabel()} avg"
         binding.tvMaxB.text = if (state.tripB.maxSpeedKmh > 0)
-            "${state.tripB.maxSpeedKmh} km/h max" else "-- km/h max"
+            "${formatSpeed(state.tripB.maxSpeedKmh)} ${speedUnitLabel()} max" else "-- ${speedUnitLabel()} max"
 
         binding.btnVehicleSelector.isEnabled = !state.isRunning
         binding.btnVehicleSelector.setTextColor(
@@ -855,13 +860,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun formatOdometer(km: Double): String {
-        val total = km.toInt().coerceIn(0, 999999)
-        val thousands = total / 1000
-        val remainder = total % 1000
-        return "%03d %03d km".format(thousands, remainder)
-    }
-
     private fun applyHudMode() {
         binding.root.scaleX = if (isHudMode) -1f else 1f
         binding.btnResetA.isEnabled = !isHudMode
@@ -873,4 +871,8 @@ class MainActivity : AppCompatActivity() {
             else Color.parseColor("#888888")
         )
     }
+
+    private fun formatSpeed(kmh: Int): String = SpeedUnitFormatter.formatSpeed(this, kmh)
+    private fun formatDistance(km: Double): String = SpeedUnitFormatter.formatDistance(this, km)
+    private fun speedUnitLabel(): String = SpeedUnitFormatter.unitLabel(this)
 }

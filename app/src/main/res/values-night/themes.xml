@@ -5,4 +5,11 @@
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
         <item name="android:statusBarColor">@color/black</item>
     </style>
+    <style name="Theme.Vaart.Standard" parent="Theme.Material3.Dark">
+        <item name="android:statusBarColor">@color/black</item>
+        <item name="colorSurface">#0D0D1A</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+        <item name="colorOnSurfaceVariant">#AAAAAA</item>
+        <item name="colorPrimary">#4DA8FF</item>
+    </style>
 </resources>

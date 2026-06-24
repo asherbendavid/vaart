@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <ListPreference
+        android:key="pref_speed_unit"
+        android:title="Speed unit"
+        android:summary="%s"
+        android:entries="@array/speed_unit_entries"
+        android:entryValues="@array/speed_unit_values"
+        android:defaultValue="region" />
+
 </PreferenceScreen>

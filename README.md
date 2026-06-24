@@ -73,7 +73,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] Settings entry point added to the existing main menu, alongside Trip History
 
 ### Phase 5b — Settings Population (In Progress)
-- [x] Speed unit setting — Follow region / km/h / mph (manual 3-way choice; "Follow region" currently falls back to device locale, automatic GPS-based region detection is planned for Phase 6)
+- [x] Speed unit setting — Follow region / km/h / mph, fully applied across the main screen, session summary, trip history, and trip map (shared conversion logic in `SpeedUnitFormatter`); "Follow region" currently falls back to device locale, automatic GPS-based detection is planned for Phase 6
 - [ ] Battery percentage text show/hide toggle
 - [ ] Hide system status bar option
 - [ ] Selectable alert audio channel (alarm/notification/ringtone/media)
@@ -124,6 +124,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - **Mapping:** OSMDroid (no API key required) for trip route display
 - **Speed limit data:** OpenStreetMap, queried via the Overpass API, cached locally in Room with a tile-based system to minimise live network calls
 - **Settings:** `androidx.preference`, backed by the same `vaart_prefs` SharedPreferences file used elsewhere in the app
+- **Speed/distance unit conversion:** centralised in `SpeedUnitFormatter`, a single shared object read by every screen that displays speed, distance, or odometer values — avoids duplicating unit-conversion logic per activity. mph/mile conversions round up rather than truncate.
 - **Persistence:**
   - SharedPreferences (`vaart_prefs`) — the live source of truth during an active session: anonymous vehicle data, active Trip A/B, active vehicle reference, app settings
   - Room DB — named vehicle profiles, trip records and recorded routes, cached speed-limit road data; vehicle/trip data is a periodic snapshot synced at specific moments (switch, reset, edit, create), not continuously

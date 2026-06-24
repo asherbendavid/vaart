@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="speed_unit_entries">
+        <item>Follow region</item>
+        <item>km/h</item>
+        <item>mph</item>
+    </string-array>
+    <string-array name="speed_unit_values">
+        <item>region</item>
+        <item>kmh</item>
+        <item>mph</item>
+    </string-array>
+</resources>
