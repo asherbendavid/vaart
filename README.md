@@ -74,9 +74,9 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ### Phase 5b — Settings Population (In Progress)
 - [x] Speed unit setting — Follow region / km/h / mph, fully applied across the main screen, session summary, trip history, and trip map (shared conversion logic in `SpeedUnitFormatter`); "Follow region" currently falls back to device locale, automatic GPS-based detection is planned for Phase 6
-- [ ] Battery percentage text show/hide toggle
-- [ ] Hide system status bar option
-- [ ] Selectable alert audio channel (alarm/notification/ringtone/media)
+- [x] Battery percentage text show/hide toggle
+- [x] Hide system status bar option
+- [x] Selectable alert audio channel (alarm/notification/ringtone/media)
 - [ ] Overspeed alert grace margin (configurable buffer before the alert fires)
 - [ ] Reverse landscape orientation option
 - [ ] Speed sign opacity setting (dimmed when within limits, full opacity when breached) and a historic 1990s-style colour scheme option
