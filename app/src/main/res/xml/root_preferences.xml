@@ -21,4 +21,12 @@
         android:summary="Maximize screen space on the main display"
         android:defaultValue="false" />
 
+    <ListPreference
+        android:key="pref_audio_channel"
+        android:title="Alert sound channel"
+        android:summary="%s"
+        android:entries="@array/audio_channel_entries"
+        android:entryValues="@array/audio_channel_values"
+        android:defaultValue="alarm" />
+
 </PreferenceScreen>

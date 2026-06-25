@@ -838,6 +838,7 @@ class MainActivity : AppCompatActivity() {
         loadVehicleSelector()
         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let {updateBattery(it)}
         applyStatusBarPref()
+        locationService?.reloadAudioSettings()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

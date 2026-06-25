@@ -86,8 +86,24 @@ class LocationService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         loadPersistedState()
+        initSoundPool()
+        setupLocationUpdates()
+        repository = VehicleRepository(this)
+        speedLimitManager = SpeedLimitManager(this)
+    }
+
+    private fun resolveAlertUsage(): Int {
+        return when (prefs.getString("pref_audio_channel", "alarm")) {
+            "notification" -> AudioAttributes.USAGE_NOTIFICATION
+            "ringtone" -> AudioAttributes.USAGE_NOTIFICATION_RINGTONE
+            "media" -> AudioAttributes.USAGE_MEDIA
+            else -> AudioAttributes.USAGE_ALARM
+        }
+    }
+
+    private fun initSoundPool() {
         val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setUsage(resolveAlertUsage())
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         soundPool = SoundPool.Builder()
@@ -95,9 +111,12 @@ class LocationService : Service() {
             .setAudioAttributes(audioAttributes)
             .build()
         alertSoundId = soundPool.load(this, R.raw.overspeed_alert, 1)
-        setupLocationUpdates()
-        repository = VehicleRepository(this)
-        speedLimitManager = SpeedLimitManager(this)
+    }
+
+    /** Called when the audio channel setting changes while the service is already running. */
+    fun reloadAudioSettings() {
+        soundPool.release()
+        initSoundPool()
     }
 
     private fun loadPersistedState() {

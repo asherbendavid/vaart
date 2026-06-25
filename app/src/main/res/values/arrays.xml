@@ -10,4 +10,16 @@
         <item>kmh</item>
         <item>mph</item>
     </string-array>
+    <string-array name="audio_channel_entries">
+        <item>Alarm</item>
+        <item>Notification</item>
+        <item>Ringtone</item>
+        <item>Media</item>
+    </string-array>
+    <string-array name="audio_channel_values">
+        <item>alarm</item>
+        <item>notification</item>
+        <item>ringtone</item>
+        <item>media</item>
+    </string-array>
 </resources>
