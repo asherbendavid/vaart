@@ -12,6 +12,9 @@ import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -78,6 +81,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applyStatusBarPref()
         updateClock()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -773,6 +777,8 @@ class MainActivity : AppCompatActivity() {
         if (level == -1 || scale == -1) return
 
         val pct = (level * 100) / scale
+        val showPct = prefs.getBoolean("pref_show_battery_pct",true)
+        binding.tvBatteryPct.visibility = if(showPct) View.VISIBLE else View.GONE
         val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
                 status == BatteryManager.BATTERY_STATUS_FULL
 
@@ -826,9 +832,17 @@ class MainActivity : AppCompatActivity() {
         batteryPulseAnimator = null
         (binding.batteryShell.background as? GradientDrawable)?.setColor(Color.TRANSPARENT)
     }
+
     override fun onResume() {
         super.onResume()
         loadVehicleSelector()
+        registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let {updateBattery(it)}
+        applyStatusBarPref()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyStatusBarPref()
     }
 
     override fun onStop() {
@@ -870,6 +884,22 @@ class MainActivity : AppCompatActivity() {
             if (isHudMode) Color.parseColor("#F59E0B")
             else Color.parseColor("#888888")
         )
+    }
+
+    private fun applyStatusBarPref() {
+        val hide = prefs.getBoolean("pref_hide_status_bar", false)
+        val controller = WindowCompat.getInsetsController(window, binding.root)
+
+        window.statusBarColor = Color.BLACK
+        controller.isAppearanceLightStatusBars = false // light-colored icons, for a dark bg
+
+        if (hide) {
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
     }
 
     private fun formatSpeed(kmh: Int): String = SpeedUnitFormatter.formatSpeed(this, kmh)

@@ -244,6 +244,7 @@
         android:layout_height="44dp"
         android:text="START"
         android:textSize="13sp"
+        android:textColor="@android:color/white"
         android:backgroundTint="#0E4520"
         android:layout_marginStart="12dp"
         android:layout_marginEnd="8dp"

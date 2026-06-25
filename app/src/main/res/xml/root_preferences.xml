@@ -9,4 +9,16 @@
         android:entryValues="@array/speed_unit_values"
         android:defaultValue="region" />
 
+    <SwitchPreferenceCompat
+        android:key="pref_show_battery_pct"
+        android:title="Show battery percentage"
+        android:summary="Display the % text next to the battery icon"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
+        android:key="pref_hide_status_bar"
+        android:title="Hide status bar"
+        android:summary="Maximize screen space on the main display"
+        android:defaultValue="false" />
+
 </PreferenceScreen>
