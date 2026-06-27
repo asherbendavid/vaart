@@ -92,6 +92,10 @@ class LocationService : Service() {
         speedLimitManager = SpeedLimitManager(this)
     }
 
+    private fun overspeedGraceMarginKmh(): Float {
+        val raw = prefs.getString("pref_overspeed_grace_value", "0")?.toFloatOrNull() ?: 0f
+        return raw * SpeedUnitFormatter.unitConversionFactor(this).toFloat()
+    }
     private fun resolveAlertUsage(): Int {
         return when (prefs.getString("pref_audio_channel", "alarm")) {
             "notification" -> AudioAttributes.USAGE_NOTIFICATION
@@ -234,12 +238,13 @@ class LocationService : Service() {
             }
         }
 
+        val grace = overspeedGraceMarginKmh()
         val isOverSpeed = _uiState.value.isRunning &&
-                currentMaxSpeedLimit != null && speedKmhFloat > currentMaxSpeedLimit!!
+                currentMaxSpeedLimit != null && speedKmhFloat > currentMaxSpeedLimit!! + grace
         if (isOverSpeed) triggerOverspeedAlert()
 
         val isUnderSpeed = _uiState.value.isRunning &&
-                currentMinSpeedLimit != null && speedKmhFloat < currentMinSpeedLimit!!
+                currentMinSpeedLimit != null && speedKmhFloat < currentMinSpeedLimit!! - grace
         if (isUnderSpeed && !wasUnderspeed) triggerUnderspeedAlert()
         wasUnderspeed = isUnderSpeed
 

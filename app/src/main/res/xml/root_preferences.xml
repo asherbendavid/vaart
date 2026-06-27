@@ -9,6 +9,11 @@
         android:entryValues="@array/speed_unit_values"
         android:defaultValue="region" />
 
+    <EditTextPreference
+        android:key="pref_overspeed_grace_value"
+        android:title="Overspeed alert grace margin"
+        android:defaultValue="0" />
+
     <SwitchPreferenceCompat
         android:key="pref_show_battery_pct"
         android:title="Show battery percentage"
