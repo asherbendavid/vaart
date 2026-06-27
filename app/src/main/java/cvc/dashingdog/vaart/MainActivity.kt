@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyStatusBarPref()
+        applyHudMode()
         updateClock()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -839,6 +840,7 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let {updateBattery(it)}
         applyStatusBarPref()
         locationService?.reloadAudioSettings()
+        applyHudMode()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -877,6 +879,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyHudMode() {
         binding.root.scaleX = if (isHudMode) -1f else 1f
+
+        val rotatePrefKey = if (isHudMode) "pref_rotate_hud" else "pref_rotate_normal"
+        val shouldRotate = prefs.getBoolean(rotatePrefKey, false)
+        binding.root.rotation = if(shouldRotate) 180f else 0f
+
         binding.btnResetA.isEnabled = !isHudMode
         binding.btnResetB.isEnabled = !isHudMode
         //binding.btnHud.textColor  // optional visual feedback
