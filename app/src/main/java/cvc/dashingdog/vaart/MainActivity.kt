@@ -3,6 +3,7 @@ package cvc.dashingdog.vaart
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -82,6 +83,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyStatusBarPref()
+        applyScreenRotation()
         updateClock()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -97,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnHud.setOnClickListener {
             isHudMode = !isHudMode
             applyHudMode()
+            applyScreenRotation()
         }
         repository = VehicleRepository(this)
         binding.btnVehicleSelector.setOnClickListener { showVehicleMenu() }
@@ -838,6 +841,8 @@ class MainActivity : AppCompatActivity() {
         loadVehicleSelector()
         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let {updateBattery(it)}
         applyStatusBarPref()
+        applyHudMode()
+        applyScreenRotation()
         locationService?.reloadAudioSettings()
     }
 
@@ -885,6 +890,15 @@ class MainActivity : AppCompatActivity() {
             if (isHudMode) Color.parseColor("#F59E0B")
             else Color.parseColor("#888888")
         )
+    }
+
+    private fun applyScreenRotation() {
+        val rotatePrefKey = if (isHudMode) "pref_rotate_hud" else "pref_rotate_normal"
+        val shouldRotate = prefs.getBoolean(rotatePrefKey, false)
+        requestedOrientation = if (shouldRotate)
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        else
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 
     private fun applyStatusBarPref() {
