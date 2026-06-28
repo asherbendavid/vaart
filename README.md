@@ -77,8 +77,8 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] Battery percentage text show/hide toggle
 - [x] Hide system status bar option
 - [x] Selectable alert audio channel (alarm/notification/ringtone/media)
-- [ ] Overspeed alert grace margin (configurable buffer before the alert fires)
-- [ ] Reverse landscape orientation option
+- [x] Overspeed alert grace margin (configurable buffer before the alert fires)
+- [x] Reverse landscape orientation option
 - [ ] Speed sign opacity setting (dimmed when within limits, full opacity when breached) and a historic 1990s-style colour scheme option
 
 ### Phase 6 — Speed Limit Hardening (Planned)
