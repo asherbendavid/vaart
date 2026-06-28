@@ -717,8 +717,16 @@ class MainActivity : AppCompatActivity() {
                 else -> android.graphics.Color.WHITE
             }
         )
-        binding.vMaxSpeedLine.visibility = if (state.isOverspeed) View.VISIBLE else View.INVISIBLE
-        binding.vMinSpeedLine.visibility = if (state.isUnderspeed) View.VISIBLE else View.INVISIBLE
+
+        val lineEnabled = prefs.getBoolean("pref_indicator_line", true)
+        val opacityEnabled = prefs.getBoolean("pref_indicator_opacity", true)
+        val baseAlpha = prefs.getInt("pref_sign_base_alpha", 30) / 100f
+
+        binding.vMaxSpeedLine.visibility = if (lineEnabled && state.isOverspeed) View.VISIBLE else View.INVISIBLE
+        binding.vMinSpeedLine.visibility = if (lineEnabled && state.isUnderspeed) View.VISIBLE else View.INVISIBLE
+
+        binding.tvMaxSpeedSign.alpha = if (opacityEnabled && state.isOverspeed) 1f else baseAlpha
+        binding.tvMinSpeedSign.alpha = if (opacityEnabled && state.isUnderspeed) 1f else baseAlpha
 
         binding.tvMaxSpeedSign.text = state.maxSpeedLimitKmh?.let { formatSpeed(it) } ?: "--"
         binding.tvMinSpeedSign.text = state.minSpeedLimitKmh?.let { formatSpeed(it) } ?: ""

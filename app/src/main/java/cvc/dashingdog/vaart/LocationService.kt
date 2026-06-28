@@ -438,7 +438,8 @@ class LocationService : Service() {
     )
 
     private fun triggerOverspeedAlert() {
-        if (!_uiState.value.isRunning) return // Disable overspeed warnings while not in active sesstion
+        if (!prefs.getBoolean("pref_indicator_audible", true)) return // exit function if audio alert is disabled in user settings
+        if (!_uiState.value.isRunning) return // Disable audio warnings while not in active session
         val now = System.currentTimeMillis()
         if (now - lastAlertTime < ALERT_REPEAT_MS) return
         lastAlertTime = now
@@ -448,6 +449,8 @@ class LocationService : Service() {
     }
 
     private fun triggerUnderspeedAlert() {
+        if (!prefs.getBoolean("pref_indicator_audible", true)) return // exit function if audio alert is disabled in user settings
+        if (!_uiState.value.isRunning) return // Disable audio warnings while not in active session
         soundPool.play(alertSoundId, 1f, 1f, 0, 0, 1f)
     }
 

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <ListPreference
         android:key="pref_speed_unit"
@@ -44,5 +45,28 @@
         android:entries="@array/audio_channel_entries"
         android:entryValues="@array/audio_channel_values"
         android:defaultValue="alarm" />
+
+    <PreferenceCategory android:title="Speed limit indicators">
+    <SwitchPreferenceCompat
+        android:key="pref_indicator_audible"
+        android:title="Audible alert"
+        android:defaultValue="true" />
+    <SwitchPreferenceCompat
+        android:key="pref_indicator_line"
+        android:title="Underline indicator"
+        android:defaultValue="true" />
+    <SwitchPreferenceCompat
+        android:key="pref_indicator_opacity"
+        android:title="Sign opacity indicator"
+        android:summary="Sign becomes fully opaque when the limit is breached"
+        android:defaultValue="true" />
+    <SeekBarPreference
+        android:key="pref_sign_base_alpha"
+        android:title="Sign opacity (normal)"
+        android:summary="How visible the speed-limit sign is when not breached"
+        android:defaultValue="30"
+        android:max="100"
+        app:showSeekBarValue="true" />
+    </PreferenceCategory>
 
 </PreferenceScreen>
