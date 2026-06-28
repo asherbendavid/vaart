@@ -100,6 +100,7 @@ class MainActivity : AppCompatActivity() {
             isHudMode = !isHudMode
             applyHudMode()
             applyScreenRotation()
+            applySignColorScheme()
         }
         repository = VehicleRepository(this)
         binding.btnVehicleSelector.setOnClickListener { showVehicleMenu() }
@@ -851,6 +852,7 @@ class MainActivity : AppCompatActivity() {
         applyStatusBarPref()
         applyHudMode()
         applyScreenRotation()
+        applySignColorScheme()
         locationService?.reloadAudioSettings()
     }
 
@@ -886,6 +888,17 @@ class MainActivity : AppCompatActivity() {
         ) {
             startAndBindService()
         }
+    }
+
+    private fun applySignColorScheme() {
+        val scheme = SignColorSchemes.byKey(prefs.getString("pref_sign_color_scheme", "international"))
+        val strokeWidthPx = (6 * resources.displayMetrics.density).toInt() // matches existing 6dp
+
+        binding.tvMaxSpeedSign.background = scheme.buildMaxDrawable(strokeWidthPx)
+        binding.tvMaxSpeedSign.setTextColor(scheme.maxTextColor)
+
+        binding.tvMinSpeedSign.background = scheme.buildMinDrawable(strokeWidthPx)
+        binding.tvMinSpeedSign.setTextColor(scheme.minTextColor)
     }
 
     private fun applyHudMode() {

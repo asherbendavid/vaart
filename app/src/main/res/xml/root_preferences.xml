@@ -69,4 +69,12 @@
         app:showSeekBarValue="true" />
     </PreferenceCategory>
 
+    <ListPreference
+        android:key="pref_sign_color_scheme"
+        android:title="Speed sign color scheme"
+        android:summary="%s"
+        android:entries="@array/sign_color_scheme_entries"
+        android:entryValues="@array/sign_color_scheme_values"
+        android:defaultValue="international" />
+
 </PreferenceScreen>
