@@ -26,17 +26,6 @@
         android:summary="Maximize screen space on the main display"
         android:defaultValue="false" />
 
-    <SwitchPreferenceCompat
-        android:key="pref_rotate_normal"
-        android:title="Rotate display 180° (normal mode)"
-        android:summary="Useful for matching charge port orientation"
-        android:defaultValue="false" />
-    <SwitchPreferenceCompat
-        android:key="pref_rotate_hud"
-        android:title="Rotate display 180° (HUD mode)"
-        android:summary="Useful for matching charge port orientation"
-        android:defaultValue="false" />
-
     <ListPreference
         android:key="pref_audio_channel"
         android:title="Alert sound channel"
