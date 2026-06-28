@@ -49,13 +49,20 @@ class SpeedLimitManager(context: Context) {
         }
     }
 
+    data class SpeedLimitMatch(
+        val maxSpeedKmh: Int?,
+        val minSpeedKmh: Int?,
+        val wayName: String?,
+        val osmWayId: Long?
+    )
+
     /** Returns (maxSpeedKmh, minSpeedKmh) for the nearest cached road, or nulls if nothing nearby. */
-    suspend fun lookupSpeedLimits(lat: Double, lon: Double): Pair<Int?, Int?> {
+    suspend fun lookupSpeedLimits(lat: Double, lon: Double): SpeedLimitMatch {
         val candidates = repository.getCandidateWays(
             south = lat - MATCH_RADIUS_DEG, north = lat + MATCH_RADIUS_DEG,
             west = lon - MATCH_RADIUS_DEG, east = lon + MATCH_RADIUS_DEG
         )
-        if (candidates.isEmpty()) return null to null
+        if (candidates.isEmpty()) return SpeedLimitMatch(null, null, null, null)
 
         var nearest: SpeedLimitWay? = null
         var nearestDist = Double.MAX_VALUE
@@ -63,7 +70,7 @@ class SpeedLimitManager(context: Context) {
             val dist = distanceToWay(lat, lon, way.pointsEncoded)
             if (dist < nearestDist) { nearestDist = dist; nearest = way }
         }
-        return nearest?.maxSpeedKmh to nearest?.minSpeedKmh
+        return SpeedLimitMatch(nearest?.maxSpeedKmh, nearest?.minSpeedKmh, nearest?.name, nearest?.osmWayId)
     }
 
     /**

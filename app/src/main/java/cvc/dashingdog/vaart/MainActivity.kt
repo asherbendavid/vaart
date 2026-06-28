@@ -437,26 +437,26 @@ class MainActivity : AppCompatActivity() {
                 if (isVehicleCorrectionInProgress) {
                     performVehicleCorrection(newVehicle)
                 } else {
-                 showOdoCheckPrompt(newVehicle) { confirmedVehicle ->
-                     lifecycleScope.launch {
-                           saveCurrentVehicleData()
+                    showOdoCheckPrompt(newVehicle) { confirmedVehicle ->
+                        lifecycleScope.launch {
+                            saveCurrentVehicleData()
                             if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
                             isVehicleCorrectionInProgress = false
                             locationService?.loadVehicleData(
                                 newVehicle.id,
-                               confirmedVehicle.odometerKm,
-                               TripData(
-                                  distanceKm = newVehicle.tripBDistanceKm,
-                                  movingTimeMs = newVehicle.tripBMovingTimeMs,
-                                  maxSpeedKmh = newVehicle.tripBMaxSpeedKmh
-                              )
+                                confirmedVehicle.odometerKm,
+                                TripData(
+                                    distanceKm = newVehicle.tripBDistanceKm,
+                                    movingTimeMs = newVehicle.tripBMovingTimeMs,
+                                    maxSpeedKmh = newVehicle.tripBMaxSpeedKmh
+                                )
                             )
-                        currentVehicleId = vehicleId
-                        saveActiveVehicleId()
-                        updateVehicleSelectorButton()
-                        loadVehicleSelector()
+                            currentVehicleId = vehicleId
+                            saveActiveVehicleId()
+                            updateVehicleSelectorButton()
+                            loadVehicleSelector()
+                        }
                     }
-                 }
                 }
             }
         }
@@ -775,6 +775,9 @@ class MainActivity : AppCompatActivity() {
             if (state.isRunning) Color.parseColor("#444444")
             else Color.parseColor("#888888")
         )
+
+        // Debug panel
+        binding.tvDebugPanel.text = DebugPanelRenderer.render(state.debugInfo)
     }
 
     private fun updateClock() {

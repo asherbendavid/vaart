@@ -11,6 +11,7 @@ data class SpeedLimitWay(
     val maxSpeedKmh: Int? = null,
     val minSpeedKmh: Int? = null,
     val pointsEncoded: String, // "lat1,lon1;lat2,lon2;..."
+    val name: String? = null,
     val minLat: Double,
     val maxLat: Double,
     val minLon: Double,

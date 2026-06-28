@@ -60,6 +60,9 @@ object OverpassClient {
             val maxSpeed = tags?.optString("maxspeed")?.toIntOrNull()
             val minSpeed = tags?.optString("minspeed")?.toIntOrNull()
             if (maxSpeed == null && minSpeed == null) continue
+            val wayName = tags?.optString("name")?.takeIf { it.isNotBlank() }
+                ?: tags?.optString("ref")?.takeIf { it.isNotBlank() }
+
 
             val geometry = element.optJSONArray("geometry") ?: continue
             if (geometry.length() == 0) continue
@@ -86,6 +89,7 @@ object OverpassClient {
                     maxSpeedKmh = maxSpeed,
                     minSpeedKmh = minSpeed,
                     pointsEncoded = points.toString(),
+                    name = wayName,
                     minLat = minLat, maxLat = maxLat,
                     minLon = minLon, maxLon = maxLon
                 )
