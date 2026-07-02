@@ -74,23 +74,38 @@ class SpeedLimitManager(context: Context) {
     }
 
     /**
-     * v1 simplification: distance to the NEAREST POINT in the way's geometry,
-     * not true nearest-segment distance. OSM ways are usually densely
-     * sampled enough that this is a close approximation, and it's far
-     * simpler/safer code than full point-to-segment math. Worth revisiting
-     * if real-world testing shows mismatches on long straight stretches.
+     * True nearest-segment distance: projects the current position onto each
+     * consecutive segment [A→B] in the way's geometry, clamps to the segment
+     * endpoints, and returns the minimum perpendicular distance across all segments.
      */
     private fun distanceToWay(lat: Double, lon: Double, pointsEncoded: String): Double {
-        val lonScale = cos(Math.toRadians(lat)) // compress longitude towards real-world distance
-        var minDist = Double.MAX_VALUE
-        for (pair in pointsEncoded.split(";")) {
+        val lonScale = cos(Math.toRadians(lat))
+        val points = pointsEncoded.split(";").mapNotNull { pair ->
             val parts = pair.split(",")
-            if (parts.size != 2) continue
-            val wLat = parts[0].toDoubleOrNull() ?: continue
-            val wLon = parts[1].toDoubleOrNull() ?: continue
-            val dLat = lat - wLat
-            val dLon = (lon - wLon) * lonScale
-            val dist = sqrt(dLat * dLat + dLon * dLon)
+            if (parts.size != 2) null
+            else parts[0].toDoubleOrNull()?.let { wLat ->
+                parts[1].toDoubleOrNull()?.let { wLon -> wLat to wLon }
+            }
+        }
+        if (points.isEmpty()) return Double.MAX_VALUE
+
+        var minDist = Double.MAX_VALUE
+
+        for (i in 0 until points.size - 1) {
+            val (aLat, aLon) = points[i]
+            val (bLat, bLon) = points[i + 1]
+
+            // Work in a flat (scaled) coordinate space so lat/lon distances are comparable
+            val pX = (lon - aLon) * lonScale;  val pY = lat - aLat
+            val dX = (bLon - aLon) * lonScale; val dY = bLat - aLat
+            val segLenSq = dX * dX + dY * dY
+
+            // t is how far along the segment [A→B] the closest point to P falls (0=A, 1=B)
+            val t = if (segLenSq == 0.0) 0.0 else ((pX * dX + pY * dY) / segLenSq).coerceIn(0.0, 1.0)
+
+            val nearX = pX - t * dX
+            val nearY = pY - t * dY
+            val dist = sqrt(nearX * nearX + nearY * nearY)
             if (dist < minDist) minDist = dist
         }
         return minDist
