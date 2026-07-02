@@ -45,9 +45,10 @@ enum class DebugField {
  * this set ahead of the logic that will eventually populate them.
  */
 val ACTIVE_DEBUG_FIELDS: Set<DebugField> = setOf(
-    DebugField.CURRENT_LOCATION,
     DebugField.WAY_NAME,
-    DebugField.WAY_ID
+    DebugField.BEARING_RAW,
+    DebugField.MATCH_DISTANCE,
+    DebugField.CANDIDATE_COUNT
 )
 
 /** Renders only the active, currently-available fields as one "Label: value" line each. */

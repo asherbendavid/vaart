@@ -81,6 +81,8 @@ class LocationService : Service() {
     private var currentWayName: String? = null
     private var currentWayId: Long? = null
     private var wasUnderspeed = false
+    private var currentMatchDistanceM: Double? = null
+    private var currentCandidateCount: Int = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -234,11 +236,18 @@ class LocationService : Service() {
             val lon = location.longitude
             serviceScope.launch {
                 speedLimitManager.ensureTileCached(lat, lon)
-                val match = speedLimitManager.lookupSpeedLimits(lat, lon)
+                val match = speedLimitManager.lookupSpeedLimits(
+                    lat = location.latitude,
+                    lon = location.longitude,
+                    bearingDeg = if (location.hasBearing()) location.bearing else null,
+                    speedKmh = displaySpeed
+                )
                 currentMaxSpeedLimit = match.maxSpeedKmh
                 currentMinSpeedLimit = match.minSpeedKmh
                 currentWayName = match.wayName
                 currentWayId = match.osmWayId
+                currentMatchDistanceM = match.matchDistanceM
+                currentCandidateCount = match.candidateCount
             }
         }
 
@@ -269,7 +278,10 @@ class LocationService : Service() {
                 maxSpeedLimitKmh = currentMaxSpeedLimit,
                 minSpeedLimitKmh = currentMinSpeedLimit,
                 wayName = currentWayName,
-                wayId = currentWayId
+                wayId = currentWayId,
+                bearingRawDeg = if (location.hasBearing()) location.bearing else null,
+                matchDistanceM = currentMatchDistanceM,
+                candidateCount = currentCandidateCount
             )
         )
 

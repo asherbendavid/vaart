@@ -4,6 +4,8 @@ import android.content.Context
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sqrt
+import kotlin.math.atan2
+import kotlin.math.abs
 
 class SpeedLimitManager(context: Context) {
 
@@ -14,6 +16,8 @@ class SpeedLimitManager(context: Context) {
         private const val TILE_EXPIRY_MS = 30L * 24 * 60 * 60 * 1000
         private const val EDGE_THRESHOLD_DEG = 0.0045 // ~500m
         private const val MATCH_RADIUS_DEG = 0.0003   // ~30m
+        private const val MIN_BEARING_SPEED_KMH = 20.0 // below this, bearing is too noisy to use
+        private const val MAX_BEARING_SPEED_KMH = 60.0 // above this, full bearing weight applied
     }
 
     private fun tileKey(value: Double): Int = floor(value / TILE_SIZE_DEG).toInt()
@@ -53,24 +57,61 @@ class SpeedLimitManager(context: Context) {
         val maxSpeedKmh: Int?,
         val minSpeedKmh: Int?,
         val wayName: String?,
-        val osmWayId: Long?
+        val osmWayId: Long?,
+        val matchDistanceM: Double? = null,
+        val candidateCount: Int = 0
     )
 
+    private data class SegmentResult(val distance: Double, val bearingDeg: Double)
+
     /** Returns (maxSpeedKmh, minSpeedKmh) for the nearest cached road, or nulls if nothing nearby. */
-    suspend fun lookupSpeedLimits(lat: Double, lon: Double): SpeedLimitMatch {
+    suspend fun lookupSpeedLimits(lat: Double, lon: Double, bearingDeg: Float?, speedKmh: Int): SpeedLimitMatch {
         val candidates = repository.getCandidateWays(
             south = lat - MATCH_RADIUS_DEG, north = lat + MATCH_RADIUS_DEG,
             west = lon - MATCH_RADIUS_DEG, east = lon + MATCH_RADIUS_DEG
         )
-        if (candidates.isEmpty()) return SpeedLimitMatch(null, null, null, null)
+        if (candidates.isEmpty()) return SpeedLimitMatch(null, null, null, null, null, 0)
 
-        var nearest: SpeedLimitWay? = null
-        var nearestDist = Double.MAX_VALUE
+        // Speed-scaled bearing weight: 0 below MIN speed, ramps to 1.0 at MAX speed
+        val bearingWeight = if (bearingDeg != null) {
+            ((speedKmh - MIN_BEARING_SPEED_KMH) / (MAX_BEARING_SPEED_KMH - MIN_BEARING_SPEED_KMH))
+                .coerceIn(0.0, 1.0)
+        } else 0.0
+
+        var bestWay: SpeedLimitWay? = null
+        var bestScore = Double.MAX_VALUE
+        var bestDistanceDeg = Double.MAX_VALUE
+
         for (way in candidates) {
-            val dist = distanceToWay(lat, lon, way.pointsEncoded)
-            if (dist < nearestDist) { nearestDist = dist; nearest = way }
+            val result = nearestSegment(lat, lon, way.pointsEncoded)
+
+            // Bearing penalty: angular difference [0°–90°] scaled to same units as distance.
+            // A perpendicular road at full speed adds one full MATCH_RADIUS_DEG to the score,
+            // enough to flip between two close candidates without overwhelming distance.
+            val bearingPenalty = if (bearingWeight > 0.0) {
+                val diff = bearingDifference(bearingDeg!!.toDouble(), result.bearingDeg)
+                bearingWeight * (diff / 90.0) * MATCH_RADIUS_DEG
+            } else 0.0
+
+            val score = result.distance + bearingPenalty
+            if (score < bestScore) {
+                bestScore = score
+                bestWay = way
+                bestDistanceDeg = result.distance
+            }
         }
-        return SpeedLimitMatch(nearest?.maxSpeedKmh, nearest?.minSpeedKmh, nearest?.name, nearest?.osmWayId)
+
+        // Convert degrees distance to approximate metres (1° ≈ 111320m at this latitude)
+        val distanceM = bestDistanceDeg * 111320.0
+
+        return SpeedLimitMatch(
+            maxSpeedKmh = bestWay?.maxSpeedKmh,
+            minSpeedKmh = bestWay?.minSpeedKmh,
+            wayName = bestWay?.name,
+            osmWayId = bestWay?.osmWayId,
+            matchDistanceM = distanceM,
+            candidateCount = candidates.size
+        )
     }
 
     /**
@@ -78,7 +119,7 @@ class SpeedLimitManager(context: Context) {
      * consecutive segment [A→B] in the way's geometry, clamps to the segment
      * endpoints, and returns the minimum perpendicular distance across all segments.
      */
-    private fun distanceToWay(lat: Double, lon: Double, pointsEncoded: String): Double {
+    private fun nearestSegment(lat: Double, lon: Double, pointsEncoded: String): SegmentResult {
         val lonScale = cos(Math.toRadians(lat))
         val points = pointsEncoded.split(";").mapNotNull { pair ->
             val parts = pair.split(",")
@@ -87,27 +128,43 @@ class SpeedLimitManager(context: Context) {
                 parts[1].toDoubleOrNull()?.let { wLon -> wLat to wLon }
             }
         }
-        if (points.isEmpty()) return Double.MAX_VALUE
+        if (points.isEmpty()) return SegmentResult(Double.MAX_VALUE, 0.0)
 
         var minDist = Double.MAX_VALUE
+        var bestBearing = 0.0
 
         for (i in 0 until points.size - 1) {
             val (aLat, aLon) = points[i]
             val (bLat, bLon) = points[i + 1]
 
-            // Work in a flat (scaled) coordinate space so lat/lon distances are comparable
-            val pX = (lon - aLon) * lonScale;  val pY = lat - aLat
+            val pX = (lon - aLon) * lonScale; val pY = lat - aLat
             val dX = (bLon - aLon) * lonScale; val dY = bLat - aLat
             val segLenSq = dX * dX + dY * dY
 
-            // t is how far along the segment [A→B] the closest point to P falls (0=A, 1=B)
-            val t = if (segLenSq == 0.0) 0.0 else ((pX * dX + pY * dY) / segLenSq).coerceIn(0.0, 1.0)
+            val t = if (segLenSq == 0.0) 0.0
+            else ((pX * dX + pY * dY) / segLenSq).coerceIn(0.0, 1.0)
 
             val nearX = pX - t * dX
             val nearY = pY - t * dY
             val dist = sqrt(nearX * nearX + nearY * nearY)
-            if (dist < minDist) minDist = dist
+
+            if (dist < minDist) {
+                minDist = dist
+                // Segment bearing in degrees, 0=North, clockwise (matches GPS bearing convention)
+                bestBearing = (Math.toDegrees(atan2(dX, dY)) + 360.0) % 360.0
+            }
         }
-        return minDist
+        return SegmentResult(minDist, bestBearing)
+    }
+
+    /**
+     * Angular difference between two bearings, folded to [0°, 90°].
+     * Folding to 90° treats the way as bidirectional — travelling either
+     * direction on a two-way road is an equally good match.
+     */
+    private fun bearingDifference(a: Double, b: Double): Double {
+        val diff = abs(a - b) % 360.0
+        val shortest = if (diff > 180.0) 360.0 - diff else diff   // [0, 180]
+        return if (shortest > 90.0) 180.0 - shortest else shortest  // [0, 90]
     }
 }
