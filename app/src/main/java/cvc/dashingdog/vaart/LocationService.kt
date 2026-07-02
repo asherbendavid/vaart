@@ -83,6 +83,7 @@ class LocationService : Service() {
     private var wasUnderspeed = false
     private var currentMatchDistanceM: Double? = null
     private var currentCandidateCount: Int = 0
+    private var currentHysteresisState: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -248,6 +249,7 @@ class LocationService : Service() {
                 currentWayId = match.osmWayId
                 currentMatchDistanceM = match.matchDistanceM
                 currentCandidateCount = match.candidateCount
+                currentHysteresisState = match.hysteresisState
             }
         }
 
@@ -281,7 +283,8 @@ class LocationService : Service() {
                 wayId = currentWayId,
                 bearingRawDeg = if (location.hasBearing()) location.bearing else null,
                 matchDistanceM = currentMatchDistanceM,
-                candidateCount = currentCandidateCount
+                candidateCount = currentCandidateCount,
+                hysteresisState = currentHysteresisState
             )
         )
 

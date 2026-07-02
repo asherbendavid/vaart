@@ -46,8 +46,7 @@ enum class DebugField {
  */
 val ACTIVE_DEBUG_FIELDS: Set<DebugField> = setOf(
     DebugField.WAY_NAME,
-    DebugField.BEARING_RAW,
-    DebugField.MATCH_DISTANCE,
+    DebugField.HYSTERESIS_STATE,
     DebugField.CANDIDATE_COUNT
 )
 

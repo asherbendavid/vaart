@@ -10,6 +10,9 @@ import kotlin.math.abs
 class SpeedLimitManager(context: Context) {
 
     private val repository = SpeedLimitRepository(context)
+    private var lockedWay: SpeedLimitWay? = null
+    private var challengerWay: SpeedLimitWay? = null
+    private var challengerCount: Int = 0
 
     companion object {
         private const val TILE_SIZE_DEG = 0.02       // ~2km at Western Cape latitude
@@ -18,6 +21,7 @@ class SpeedLimitManager(context: Context) {
         private const val MATCH_RADIUS_DEG = 0.0003   // ~30m
         private const val MIN_BEARING_SPEED_KMH = 20.0 // below this, bearing is too noisy to use
         private const val MAX_BEARING_SPEED_KMH = 60.0 // above this, full bearing weight applied
+        private const val HYSTERESIS_THRESHOLD = 3 // updates challenger must win before switching
     }
 
     private fun tileKey(value: Double): Int = floor(value / TILE_SIZE_DEG).toInt()
@@ -59,7 +63,8 @@ class SpeedLimitManager(context: Context) {
         val wayName: String?,
         val osmWayId: Long?,
         val matchDistanceM: Double? = null,
-        val candidateCount: Int = 0
+        val candidateCount: Int = 0,
+        val hysteresisState: String? = null
     )
 
     private data class SegmentResult(val distance: Double, val bearingDeg: Double)
@@ -70,7 +75,6 @@ class SpeedLimitManager(context: Context) {
             south = lat - MATCH_RADIUS_DEG, north = lat + MATCH_RADIUS_DEG,
             west = lon - MATCH_RADIUS_DEG, east = lon + MATCH_RADIUS_DEG
         )
-        if (candidates.isEmpty()) return SpeedLimitMatch(null, null, null, null, null, 0)
 
         // Speed-scaled bearing weight: 0 below MIN speed, ramps to 1.0 at MAX speed
         val bearingWeight = if (bearingDeg != null) {
@@ -104,13 +108,70 @@ class SpeedLimitManager(context: Context) {
         // Convert degrees distance to approximate metres (1° ≈ 111320m at this latitude)
         val distanceM = bestDistanceDeg * 111320.0
 
+// --- Hysteresis ---
+        when {
+            candidates.isEmpty() -> {
+                // No candidates at all — count against the lock, clear if sustained
+                if (lockedWay == null) {
+                    // nothing locked, nothing to do
+                } else if (bestWay == null || bestWay.osmWayId != lockedWay!!.osmWayId) {
+                    challengerWay = bestWay  // null challenger = "clear" challenger
+                    challengerCount++
+                    if (challengerCount >= HYSTERESIS_THRESHOLD) {
+                        lockedWay = null
+                        challengerWay = null
+                        challengerCount = 0
+                    }
+                }
+            }
+            lockedWay == null -> {
+                // Nothing locked yet — commit immediately on first match
+                lockedWay = bestWay
+                challengerWay = null
+                challengerCount = 0
+            }
+            bestWay?.osmWayId == lockedWay!!.osmWayId -> {
+                // Winner matches lock — reset any challenger
+                challengerWay = null
+                challengerCount = 0
+            }
+            else -> {
+                // Different way is winning — start or advance challenger count
+                if (bestWay?.osmWayId == challengerWay?.osmWayId) {
+                    challengerCount++
+                    if (challengerCount >= HYSTERESIS_THRESHOLD) {
+                        lockedWay = bestWay
+                        challengerWay = null
+                        challengerCount = 0
+                    }
+                } else {
+                    // New challenger — reset count
+                    challengerWay = bestWay
+                    challengerCount = 1
+                }
+            }
+        }
+
+        val activeWay = lockedWay
+        //val distanceM = bestDistanceDeg * 111320.0
+
+        val hysteresisState = when {
+            activeWay == null -> "no lock"
+            challengerWay != null -> {
+                val challengerName = challengerWay?.name ?: challengerWay?.osmWayId?.toString() ?: "unknown"
+                "locked: ${activeWay.name ?: activeWay.osmWayId} | challenger: $challengerName ($challengerCount/$HYSTERESIS_THRESHOLD)"
+            }
+            else -> "locked: ${activeWay.name ?: activeWay.osmWayId}"
+        }
+
         return SpeedLimitMatch(
-            maxSpeedKmh = bestWay?.maxSpeedKmh,
-            minSpeedKmh = bestWay?.minSpeedKmh,
-            wayName = bestWay?.name,
-            osmWayId = bestWay?.osmWayId,
+            maxSpeedKmh = activeWay?.maxSpeedKmh,
+            minSpeedKmh = activeWay?.minSpeedKmh,
+            wayName = activeWay?.name,
+            osmWayId = activeWay?.osmWayId,
             matchDistanceM = distanceM,
-            candidateCount = candidates.size
+            candidateCount = candidates.size,
+            hysteresisState = hysteresisState
         )
     }
 
