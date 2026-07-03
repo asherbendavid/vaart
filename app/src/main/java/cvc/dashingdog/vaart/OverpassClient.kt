@@ -18,12 +18,13 @@ object OverpassClient {
      */
     fun fetchSpeedLimitWays(south: Double, west: Double, north: Double, east: Double): List<SpeedLimitWay>? {
         val query = """
-            [out:json][timeout:25];
-            (
-              way[maxspeed]($south,$west,$north,$east);
-              way[minspeed]($south,$west,$north,$east);
-            );
-            out geom;
+        [out:json][timeout:25];
+        (
+          way[maxspeed]($south,$west,$north,$east);
+          way[minspeed]($south,$west,$north,$east);
+          way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|motorway_link|trunk_link|primary_link|secondary_link)$"]($south,$west,$north,$east);
+        );
+        out geom;
         """.trimIndent()
 
         return try {
@@ -59,10 +60,10 @@ object OverpassClient {
             val tags = element.optJSONObject("tags")
             val maxSpeed = tags?.optString("maxspeed")?.toIntOrNull()
             val minSpeed = tags?.optString("minspeed")?.toIntOrNull()
-            if (maxSpeed == null && minSpeed == null) continue
+            val highwayType = tags?.optString("highway")?.takeIf { it.isNotBlank() }
+            if (maxSpeed == null && minSpeed == null && highwayType == null) continue
             val wayName = tags?.optString("name")?.takeIf { it.isNotBlank() }
                 ?: tags?.optString("ref")?.takeIf { it.isNotBlank() }
-            val roadRank = tags?.optString("highway")
 
 
             val geometry = element.optJSONArray("geometry") ?: continue
@@ -93,7 +94,7 @@ object OverpassClient {
                     name = wayName,
                     minLat = minLat, maxLat = maxLat,
                     minLon = minLon, maxLon = maxLon,
-                    roadClassification = roadRank
+                    roadClassification = highwayType
                 )
             )
         }

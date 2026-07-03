@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         SpeedLimitWay::class,
         QueriedTile::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class VaartDatabase : RoomDatabase() {
