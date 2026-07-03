@@ -15,5 +15,6 @@ data class SpeedLimitWay(
     val minLat: Double,
     val maxLat: Double,
     val minLon: Double,
-    val maxLon: Double
+    val maxLon: Double,
+    val roadClassification: String? = null
 )

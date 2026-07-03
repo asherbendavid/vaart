@@ -84,6 +84,7 @@ class LocationService : Service() {
     private var currentMatchDistanceM: Double? = null
     private var currentCandidateCount: Int = 0
     private var currentHysteresisState: String? = null
+    private var currentRoadClassification: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -232,7 +233,7 @@ class LocationService : Service() {
         }
 
         locationUpdateCounter++
-        if (locationUpdateCounter % 3 == 0) {
+        if (locationUpdateCounter % 2 == 0) {
             val lat = location.latitude
             val lon = location.longitude
             serviceScope.launch {
@@ -250,6 +251,7 @@ class LocationService : Service() {
                 currentMatchDistanceM = match.matchDistanceM
                 currentCandidateCount = match.candidateCount
                 currentHysteresisState = match.hysteresisState
+                currentRoadClassification = match.roadClassification
             }
         }
 
@@ -284,7 +286,8 @@ class LocationService : Service() {
                 bearingRawDeg = if (location.hasBearing()) location.bearing else null,
                 matchDistanceM = currentMatchDistanceM,
                 candidateCount = currentCandidateCount,
-                hysteresisState = currentHysteresisState
+                hysteresisState = currentHysteresisState,
+                roadClassification = currentRoadClassification,
             )
         )
 

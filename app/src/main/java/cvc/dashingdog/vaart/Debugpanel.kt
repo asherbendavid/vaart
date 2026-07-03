@@ -47,7 +47,7 @@ enum class DebugField {
 val ACTIVE_DEBUG_FIELDS: Set<DebugField> = setOf(
     DebugField.WAY_NAME,
     DebugField.HYSTERESIS_STATE,
-    DebugField.CANDIDATE_COUNT
+    DebugField.ROAD_CLASSIFICATION,
 )
 
 /** Renders only the active, currently-available fields as one "Label: value" line each. */

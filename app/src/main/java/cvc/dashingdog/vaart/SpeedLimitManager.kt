@@ -22,6 +22,21 @@ class SpeedLimitManager(context: Context) {
         private const val MIN_BEARING_SPEED_KMH = 20.0 // below this, bearing is too noisy to use
         private const val MAX_BEARING_SPEED_KMH = 60.0 // above this, full bearing weight applied
         private const val HYSTERESIS_THRESHOLD = 3 // updates challenger must win before switching
+        private val HIGHWAY_RANK = mapOf(
+            "motorway" to 8,
+            "trunk" to 7,
+            "primary" to 6,
+            "secondary" to 5,
+            "tertiary" to 4,
+            "unclassified" to 3,
+            "residential" to 2,
+            "motorway_link" to 4,
+            "trunk_link" to 3,
+            "primary_link" to 3,
+            "secondary_link" to 2,
+            "service" to 1
+        )
+        private const val CLASSIFICATION_WEIGHT = 0.3  // tunable: fraction of MATCH_RADIUS_DEG per rank step
     }
 
     private fun tileKey(value: Double): Int = floor(value / TILE_SIZE_DEG).toInt()
@@ -64,7 +79,8 @@ class SpeedLimitManager(context: Context) {
         val osmWayId: Long?,
         val matchDistanceM: Double? = null,
         val candidateCount: Int = 0,
-        val hysteresisState: String? = null
+        val hysteresisState: String? = null,
+        val roadClassification: String? = null,
     )
 
     private data class SegmentResult(val distance: Double, val bearingDeg: Double)
@@ -97,7 +113,9 @@ class SpeedLimitManager(context: Context) {
                 bearingWeight * (diff / 90.0) * MATCH_RADIUS_DEG
             } else 0.0
 
-            val score = result.distance + bearingPenalty
+            val rank = HIGHWAY_RANK[way.roadClassification] ?: 0
+            val classificationBonus = (8 - rank) * CLASSIFICATION_WEIGHT * MATCH_RADIUS_DEG / 8.0
+            val score = result.distance + bearingPenalty + classificationBonus
             if (score < bestScore) {
                 bestScore = score
                 bestWay = way
@@ -171,7 +189,8 @@ class SpeedLimitManager(context: Context) {
             osmWayId = activeWay?.osmWayId,
             matchDistanceM = distanceM,
             candidateCount = candidates.size,
-            hysteresisState = hysteresisState
+            hysteresisState = hysteresisState,
+            roadClassification = activeWay?.roadClassification,
         )
     }
 
