@@ -85,11 +85,13 @@ class LocationService : Service() {
     private var currentCandidateCount: Int = 0
     private var currentHysteresisState: String? = null
     private var currentRoadClassification: String? = null
+    private var currentCountryCode: String? = null
 
     override fun onCreate() {
         super.onCreate()
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         createNotificationChannel()
+        DefaultSpeedLimits.init(this)
         startForeground(NOTIFICATION_ID, buildNotification())
         loadPersistedState()
         initSoundPool()
@@ -238,11 +240,16 @@ class LocationService : Service() {
             val lon = location.longitude
             serviceScope.launch {
                 speedLimitManager.ensureTileCached(lat, lon)
+                CountryDetector.invalidateIfMoved(this@LocationService, lat, lon)
+                if (currentCountryCode == null) {
+                    currentCountryCode = CountryDetector.getCountryCode(this@LocationService, lat, lon)
+                }
                 val match = speedLimitManager.lookupSpeedLimits(
                     lat = location.latitude,
                     lon = location.longitude,
                     bearingDeg = if (location.hasBearing()) location.bearing else null,
-                    speedKmh = displaySpeed
+                    speedKmh = displaySpeed,
+                    countryCode = currentCountryCode,
                 )
                 currentMaxSpeedLimit = match.maxSpeedKmh
                 currentMinSpeedLimit = match.minSpeedKmh

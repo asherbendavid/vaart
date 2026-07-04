@@ -86,7 +86,7 @@ class SpeedLimitManager(context: Context) {
     private data class SegmentResult(val distance: Double, val bearingDeg: Double)
 
     /** Returns (maxSpeedKmh, minSpeedKmh) for the nearest cached road, or nulls if nothing nearby. */
-    suspend fun lookupSpeedLimits(lat: Double, lon: Double, bearingDeg: Float?, speedKmh: Int): SpeedLimitMatch {
+    suspend fun lookupSpeedLimits(lat: Double, lon: Double, bearingDeg: Float?, speedKmh: Int, countryCode: String?): SpeedLimitMatch {
         val candidates = repository.getCandidateWays(
             south = lat - MATCH_RADIUS_DEG, north = lat + MATCH_RADIUS_DEG,
             west = lon - MATCH_RADIUS_DEG, east = lon + MATCH_RADIUS_DEG
@@ -182,8 +182,11 @@ class SpeedLimitManager(context: Context) {
             else -> "locked: ${activeWay.name ?: activeWay.osmWayId}"
         }
 
+        val resolvedMaxSpeed = activeWay?.maxSpeedKmh
+            ?: DefaultSpeedLimits.getDefaultSpeed(countryCode, activeWay?.roadClassification)
+
         return SpeedLimitMatch(
-            maxSpeedKmh = activeWay?.maxSpeedKmh,
+            maxSpeedKmh = resolvedMaxSpeed,
             minSpeedKmh = activeWay?.minSpeedKmh,
             wayName = activeWay?.name,
             osmWayId = activeWay?.osmWayId,
