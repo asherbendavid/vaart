@@ -6,7 +6,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ---
 
-## Current Features (v2.3.0+, Phase 6 complete)
+## Current Features (v2.4.0+, Phase 6 complete)
 
 - **Live speed display** — GPS-based, landscape locked, screen always on
 - **GPS accuracy indicator** — Good / Fair / Weak with colour coding
