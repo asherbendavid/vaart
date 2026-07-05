@@ -6,7 +6,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ---
 
-## Current Features (v2.2.0+, Phase 5b complete)
+## Current Features (v2.3.0+, Phase 6 complete)
 
 - **Live speed display** — GPS-based, landscape locked, screen always on
 - **GPS accuracy indicator** — Good / Fair / Weak with colour coding
@@ -59,6 +59,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 ## Companion Tools
 
 - **GPX Location Spoofer** — a separate, minimal testing app (`cvc.dashingdog.locationspoofer`) that plays back a GPX route as mock GPS input, used to test Vaart's speed-limit matching and alert behaviour against repeatable routes/speeds without needing to physically drive them (including deliberately-too-slow stretches that can't safely be tested in real traffic)
+- **GPX Route Player** — a Windows VB.NET/WinForms desktop tool that plays back a GPX file in real time on an OSM/Leaflet map (WebView2), with a moving marker, scrub slider, and filename display in the status bar. Used alongside the GPX Location Spoofer to visually follow the simulated route on a PC screen instead of running a second phone with a navigation app
 
 ---
 
@@ -88,16 +89,20 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] Speed sign colour scheme setting (International / South African 1974–1993), built on an extensible `SignColorScheme` data structure
 - [x] (Unplanned but completed along the way) Forced-dark app theme, consistent Toolbar pattern across all secondary activities — fixed a white-flash/readability bug surfaced while building the status-bar toggle
 
-### Phase 6 — Speed Limit Hardening (Planned, next)
-- [ ] Nearest-segment matching instead of nearest-point (more accurate distance calculation against a road's actual geometry)
-- [ ] Bearing/heading comparison to avoid matching against crossing or adjacent roads
-- [ ] Hysteresis — require a new road match to persist across more than one GPS fix before switching the displayed limit, to filter out momentary junction mismatches
-- [ ] Road classification weighting as a tiebreaker (prefer matches of the same road class as the currently-matched way)
-- [ ] Verification pass on South African `maxspeed` OSM tag formats, hardening the parser if non-numeric or unit-suffixed tags are found in practice
-- [ ] Automatic region detection for the speed unit setting, using a small bundled GeoJSON dataset of mph-using countries with a point-in-polygon check (replacing the Phase 5b locale-based fallback) — reusing the existing ~2 km Overpass tile infrastructure by tagging tiles as "near mph-country border: yes/no", rather than a separate point-to-polygon-edge distance system
+### Phase 6 — Speed Limit Hardening ✅ Complete
+- [x] Nearest-segment matching instead of nearest-point (true perpendicular distance to each segment, clamped to endpoints via `coerceIn`)
+- [x] Bearing/heading comparison — speed-scaled penalty (0 below 20 km/h, full weight above 60 km/h) rejects crossing/adjacent roads without overriding a genuinely closer match
+- [x] Hysteresis — challenger way must win 3 consecutive updates (~1.5s at modulo-2 update rate) before lock switches; empty-candidate runs count against the lock, fixing sticky-match on untagged roads
+- [x] Road classification weighting — `HIGHWAY_RANK` map (motorway=8 to service=1) adds a small score bonus to higher-ranked roads, breaking ties without overriding distance
+- [x] Overpass query widened to fetch all significant highway types regardless of `maxspeed` tag — way name and classification now display on untagged roads
+- [x] Global `maxspeed`/`minspeed` OSM tag parser hardened — handles plain numeric, `km/h`/`mph` suffixes, `none`/`unlimited`, `walk`, `living_street`, and `country:context` format (e.g. `ZA:urban`) resolved via defaults table. Verified on London GPX ("20 mph" parsed and converted correctly)
+- [x] Default speed limits for untagged roads — bundled `highway_speed_defaults.json` asset (country + highway type → km/h), loaded once at startup via `DefaultSpeedLimits`, applied when matched way has no explicit `maxspeed` tag. Includes published date for periodic update reference
+- [x] Nominatim-based country detection — `CountryDetector` reverse-geocodes GPS fix to ISO 3166-1 country code, cached 30 days in SharedPreferences, invalidated on ~50 km position change, device locale fallback on network failure
+- [x] Automatic mph/km/h unit switching — `detectedUseMph` derived from country code via `MPH_COUNTRY_CODES`, takes priority over locale fallback in `SpeedUnitFormatter`
+- [x] Debug panel infrastructure — `DebugPanel.kt` with `DebugInfo` data class, `DebugField` enum, `ACTIVE_DEBUG_FIELDS` compile-time selector, and `DebugPanelRenderer`; full-width 20% strip reserved in `activity_main.xml` as foundation for Phase 11 swipeable secondary widget
 - [x] ⚠️ Resolved/no longer open: the previously-flagged "📍 pin" question from an earlier session was a small mph-rounding fix (round-up via `ceil()`), already shipped in Phase 5b — no outstanding open question carried into Phase 6
 
-### Phase 7 — Trip Data Integrity (Planned)
+### Phase 7 — Trip Data Integrity (Planned, next)
 - [ ] "Pin Trip A" toggle for long road trips — bypasses the 30-minute idle expiry, with a passive on-screen indicator and a confirmation step before any reset while pinned
 - [ ] Vehicle correction from the session summary screen — lets a session started under the wrong vehicle be reassigned after the fact (selection menu, confirmation prompt, and verification that data is committed to the correct record)
 - [ ] Trip counter resets (Trip A/B) logged as their own history entries, giving a complete refuel-to-refuel distance log
@@ -141,7 +146,9 @@ Material worth carrying into the eventual help screen, captured while fresh duri
 - **Location:** FusedLocationProviderClient (Google Play Services), via a Foreground Service
 - **Background tracking:** Foreground Service with persistent notification; lifecycle-tied to focus + active session state rather than running indefinitely
 - **Mapping:** OSMDroid (no API key required) for trip route display
-- **Speed limit data:** OpenStreetMap, queried via the Overpass API, cached locally in Room with a tile-based system to minimise live network calls
+- **Speed limit data:** OpenStreetMap, queried via the Overpass API, cached locally in Room with a tile-based system to minimise live network calls. Matching pipeline: nearest-segment distance → bearing-weighted scoring → hysteresis lock → road classification tiebreaker. Untagged roads resolved via bundled `highway_speed_defaults.json` (country + highway type → km/h). Country detected via Nominatim reverse geocoding (`CountryDetector`), cached 30 days, device locale fallback
+- **Room DB version:** 7 (current). Schema includes `speed_limit_ways` (osmWayId, name, roadClassification, geometry, speed tags), `queried_tiles`, `vehicles`, `trip_records`, `trip_points`. `fallbackToDestructiveMigration()` is in place — the speed-limit cache is re-fetchable and safe to wipe on schema changes
+- **Debug panel:** `DebugPanel.kt` provides a `DebugField` enum, `ACTIVE_DEBUG_FIELDS` set (edit before each test build to select which fields render), and `DebugPanelRenderer`. Panel occupies the bottom 20% of the display in a `FrameLayout` container sized for Phase 11's future swipeable widget
 - **Settings:** `androidx.preference`, backed by the same `vaart_prefs` SharedPreferences file used elsewhere in the app. Settings that affect live on-screen state (battery %, status bar, audio channel, HUD rotation/mirror) are re-applied in `onResume()`/`onWindowFocusChanged()`, not just at cold start, so changes take effect immediately on returning from Settings rather than waiting for an unrelated future event
 - **Speed/distance unit conversion:** centralised in `SpeedUnitFormatter`, a single shared object read by every screen that displays speed, distance, or odometer values — avoids duplicating unit-conversion logic per activity. mph/mile conversions round up rather than truncate. `unitConversionFactor()` exposes the raw conversion multiplier for settings (like the grace margin) that need to convert a unit-agnostic stored value rather than format a display string
 - **Sign colour schemes:** data-driven via `SignColorScheme`/`SignColorSchemes`, rendered as runtime-built `GradientDrawable`s rather than static XML drawables, specifically so new schemes can be added as data (a new registry entry) without new rendering code in the common case. Triangular sign shapes are represented in the data model but currently render as ovals — true triangle rendering would need a custom `Path`-based drawable, deferred until actually needed
