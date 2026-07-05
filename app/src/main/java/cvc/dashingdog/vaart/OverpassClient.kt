@@ -58,8 +58,8 @@ object OverpassClient {
             if (element.optString("type") != "way") continue
 
             val tags = element.optJSONObject("tags")
-            val maxSpeed = tags?.optString("maxspeed")?.toIntOrNull()
-            val minSpeed = tags?.optString("minspeed")?.toIntOrNull()
+            val maxSpeed = parseSpeedTag(tags?.optString("maxspeed"))
+            val minSpeed = parseSpeedTag(tags?.optString("minspeed"))
             val highwayType = tags?.optString("highway")?.takeIf { it.isNotBlank() }
             if (maxSpeed == null && minSpeed == null && highwayType == null) continue
             val wayName = tags?.optString("name")?.takeIf { it.isNotBlank() }
@@ -99,5 +99,68 @@ object OverpassClient {
             )
         }
         return results
+    }
+
+    /**
+     * Parses an OSM maxspeed/minspeed tag value into km/h.
+     * Handles the known global variants:
+     *   "120"          — plain numeric (km/h assumed)
+     *   "120 km/h"     — explicit km/h suffix
+     *   "70 mph"       — mph, converted to km/h
+     *   "none"         — no limit (returns null)
+     *   "unlimited"    — no limit (returns null)
+     *   "walk"         — walking pace (~7 km/h)
+     *   "living_street"— living street (~20 km/h)
+     *   "ZA:urban"     — country:context format, resolved via defaults table
+     *   "ZA:rural"     — same
+     *   "ZA:motorway"  — same
+     * Returns null for anything unrecognised — caller treats as untagged.
+     */
+    private fun parseSpeedTag(raw: String?): Int? {
+        if (raw == null) return null
+        val value = raw.trim().lowercase()
+
+        // Special named values
+        when (value) {
+            "none", "unlimited" -> return null  // no limit — treat as untagged
+            "walk" -> return 7
+            "living_street" -> return 20
+        }
+
+        // country:context format e.g. "ZA:urban", "ZA:rural", "ZA:motorway"
+        // Map common OSM context names to OSM highway types for DefaultSpeedLimits lookup
+        if (value.contains(":")) {
+            val parts = value.split(":")
+            if (parts.size == 2) {
+                val country = parts[0].lowercase()
+                val context = when (parts[1].lowercase()) {
+                    "urban"       -> "residential"
+                    "rural"       -> "primary"
+                    "motorway"    -> "motorway"
+                    "trunk"       -> "trunk"
+                    "living_street" -> return 20
+                    "walk"        -> return 7
+                    else          -> parts[1].lowercase()  // pass through as-is
+                }
+                // Defer to our defaults table — same source of truth
+                return DefaultSpeedLimits.getDefaultSpeed(country, context)
+            }
+        }
+
+        // "70 mph" or "120 km/h"
+        if (value.contains(" ")) {
+            val parts = value.split(" ")
+            if (parts.size == 2) {
+                val number = parts[0].toDoubleOrNull() ?: return null
+                return when (parts[1].trim()) {
+                    "mph" -> (number * 1.60934).toInt()
+                    "km/h", "kmh", "kph" -> number.toInt()
+                    else -> null
+                }
+            }
+        }
+
+        // Plain numeric — km/h assumed
+        return value.toDoubleOrNull()?.toInt()
     }
 }

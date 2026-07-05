@@ -21,7 +21,7 @@ class SpeedLimitManager(context: Context) {
         private const val MATCH_RADIUS_DEG = 0.0003   // ~30m
         private const val MIN_BEARING_SPEED_KMH = 20.0 // below this, bearing is too noisy to use
         private const val MAX_BEARING_SPEED_KMH = 60.0 // above this, full bearing weight applied
-        private const val HYSTERESIS_THRESHOLD = 3 // updates challenger must win before switching
+        private const val HYSTERESIS_THRESHOLD = 1 // updates challenger must win before switching
         private val HIGHWAY_RANK = mapOf(
             "motorway" to 8,
             "trunk" to 7,

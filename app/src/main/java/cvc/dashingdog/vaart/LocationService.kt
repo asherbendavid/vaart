@@ -235,7 +235,7 @@ class LocationService : Service() {
         }
 
         locationUpdateCounter++
-        if (locationUpdateCounter % 2 == 0) {
+        if (locationUpdateCounter % 1 == 0) {
             val lat = location.latitude
             val lon = location.longitude
             serviceScope.launch {
