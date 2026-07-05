@@ -7,7 +7,7 @@ import kotlin.math.ceil
 object SpeedUnitFormatter {
 
     private const val KM_TO_MI = 0.621371
-    private val MPH_COUNTRY_CODES = setOf(
+    internal val MPH_COUNTRY_CODES = setOf(
         "US", "GB", "LR", "MM", "BS", "AG", "DM", "GD", "LC", "VC"
     )
 
@@ -16,7 +16,8 @@ object SpeedUnitFormatter {
         return when (prefs.getString("pref_speed_unit", "region")) {
             "mph" -> true
             "kmh" -> false
-            else -> Locale.getDefault().country.uppercase() in MPH_COUNTRY_CODES
+            else -> LocationService.detectedUseMph
+                ?: (Locale.getDefault().country.uppercase() in MPH_COUNTRY_CODES)
         }
     }
 

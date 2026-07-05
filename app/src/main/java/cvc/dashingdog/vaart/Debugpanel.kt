@@ -18,7 +18,8 @@ data class DebugInfo(
     val hysteresisState: String? = null,
     val roadClassification: String? = null,
     val maxSpeedLimitKmh: Int? = null,
-    val minSpeedLimitKmh: Int? = null
+    val minSpeedLimitKmh: Int? = null,
+    val detectedCountry: String? = null,
 )
 
 /**
@@ -35,7 +36,8 @@ enum class DebugField {
     BEARING_SMOOTHED,
     HYSTERESIS_STATE,
     ROAD_CLASSIFICATION,
-    SPEED_LIMITS
+    SPEED_LIMITS,
+    DETECTED_COUNTRY,
 }
 
 /**
@@ -46,7 +48,7 @@ enum class DebugField {
  */
 val ACTIVE_DEBUG_FIELDS: Set<DebugField> = setOf(
     DebugField.WAY_NAME,
-    DebugField.HYSTERESIS_STATE,
+    DebugField.DETECTED_COUNTRY,
     DebugField.ROAD_CLASSIFICATION,
 )
 
@@ -82,6 +84,12 @@ object DebugPanelRenderer {
                         val max = info.maxSpeedLimitKmh?.toString() ?: "--"
                         "Limits: $min / $max km/h"
                     } else null
+                }
+                DebugField.DETECTED_COUNTRY -> {
+                    val country = info.detectedCountry
+                    val mph = LocationService.detectedUseMph
+                    if (country != null) "Country: $country (${if (mph == true) "mph" else "km/h"})"
+                    else "Country: not yet detected"
                 }
             }
 

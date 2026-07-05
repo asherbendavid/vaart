@@ -41,6 +41,7 @@ class LocationService : Service() {
         const val OVERSPEED_THRESHOLD_KMH = 90f // change speed limit here
         private const val ALERT_BURST_INTERVAL_MS = 600L
         private const val ALERT_REPEAT_MS = 60_000L
+        var detectedUseMph: Boolean? = null // null = not yet detected, use locale fallback
     }
 
     inner class LocalBinder : Binder() {
@@ -241,8 +242,9 @@ class LocationService : Service() {
             serviceScope.launch {
                 speedLimitManager.ensureTileCached(lat, lon)
                 CountryDetector.invalidateIfMoved(this@LocationService, lat, lon)
-                if (currentCountryCode == null) {
-                    currentCountryCode = CountryDetector.getCountryCode(this@LocationService, lat, lon)
+                currentCountryCode = CountryDetector.getCountryCode(this@LocationService, lat, lon)
+                if (currentCountryCode != null){
+                    detectedUseMph = currentCountryCode?.uppercase() in SpeedUnitFormatter.MPH_COUNTRY_CODES
                 }
                 val match = speedLimitManager.lookupSpeedLimits(
                     lat = location.latitude,
@@ -295,6 +297,7 @@ class LocationService : Service() {
                 candidateCount = currentCandidateCount,
                 hysteresisState = currentHysteresisState,
                 roadClassification = currentRoadClassification,
+                detectedCountry = currentCountryCode,
             )
         )
 
