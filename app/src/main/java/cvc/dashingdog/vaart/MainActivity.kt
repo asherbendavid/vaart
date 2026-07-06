@@ -1,7 +1,7 @@
 package cvc.dashingdog.vaart
 
-import android.content.ComponentName
 import android.content.Intent
+import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -34,6 +34,8 @@ import android.os.BatteryManager
 import android.animation.ValueAnimator
 import android.graphics.drawable.GradientDrawable
 import java.util.Locale
+import androidx.appcompat.app.AlertDialog
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class MainActivity : AppCompatActivity() {
 
@@ -93,8 +95,21 @@ class MainActivity : AppCompatActivity() {
                 else svc.startTrip(currentVehicleId)
             }
         }
-        binding.btnResetA.setOnClickListener { locationService?.resetTripA() }
-        binding.btnResetB.setOnClickListener { locationService?.resetTripB() }
+        binding.btnResetA.setOnClickListener {
+            lifecycleScope.launch {
+                if (confirmResetTripAIfPinned()) {
+                    locationService?.resetTripA()
+                }
+            }
+        }
+        binding.btnResetB.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Reset Trip B")
+                .setMessage("This is your since-refuel distance. Reset it anyway?")
+                .setPositiveButton("Reset") { _, _ -> locationService?.resetTripB() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
         binding.btnMenu.setOnClickListener { showMainMenu() }
         binding.btnHud.setOnClickListener {
             isHudMode = !isHudMode
@@ -122,14 +137,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+    private suspend fun confirmResetTripAIfPinned(): Boolean {
+        val pinned = locationService?.uiState?.value?.isTripAPinned ?: false
+        if (!pinned) return true
+        return suspendCancellableCoroutine { cont ->
+            AlertDialog.Builder(this)
+                .setTitle("Trip A is pinned")
+                .setMessage("Reset Trip A anyway?")
+                .setPositiveButton("Reset") { _, _ -> cont.resume(true) {} }
+                .setNegativeButton("Cancel") { _, _ -> cont.resume(false) {} }
+                .setOnCancelListener { cont.resume(false) {} }
+                .show()
+        }
+    }
     private fun showMainMenu() {
         val popup = PopupMenu(this, binding.btnMenu)
         popup.menu.add(0, 1, 0, "Trip history")
         popup.menu.add(0, 2, 1, "Settings")
+        val pinItem = popup.menu.add(0, 3, 2, "Pin Trip A")
+        val isPinned = locationService?.uiState?.value?.isTripAPinned ?: false
+        if (isPinned) {
+            pinItem.setIcon(R.drawable.ic_check)
+        }
+
+        try {
+            val fields = popup.javaClass.declaredFields
+            for (field in fields) {
+                if (field.name == "mPopup") {
+                    field.isAccessible = true
+                    val menuPopupHelper = field.get(popup)
+                    val classPopupHelper = Class.forName(menuPopupHelper.javaClass.name)
+                    val setForceIcons = classPopupHelper.getMethod("setForceShowIcon", Boolean::class.javaPrimitiveType)
+                    setForceIcons.invoke(menuPopupHelper, true)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> { startActivity(Intent(this, TripHistoryActivity::class.java)); true }
                 2 -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
+                3 -> {
+                    val newState = !isPinned
+                    locationService?.setTripAPinned(newState)
+                    true
+                }
                 else -> false
             }
         }
@@ -422,7 +477,9 @@ class MainActivity : AppCompatActivity() {
             // switching to anonymous
             lifecycleScope.launch {
                 saveCurrentVehicleData()
-                if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
+                if (!isVehicleCorrectionInProgress) {
+                    if (confirmResetTripAIfPinned()) locationService?.resetTripA()
+                }
                 isVehicleCorrectionInProgress = false
                 locationService?.resetForAnonymous()
                 currentVehicleId = -1
@@ -440,7 +497,9 @@ class MainActivity : AppCompatActivity() {
                     showOdoCheckPrompt(newVehicle) { confirmedVehicle ->
                         lifecycleScope.launch {
                             saveCurrentVehicleData()
-                            if (!isVehicleCorrectionInProgress) locationService?.resetTripA()
+                            if (!isVehicleCorrectionInProgress) {
+                                if (confirmResetTripAIfPinned()) locationService?.resetTripA()
+                            }
                             isVehicleCorrectionInProgress = false
                             locationService?.loadVehicleData(
                                 newVehicle.id,
@@ -761,6 +820,7 @@ class MainActivity : AppCompatActivity() {
             "${formatSpeed(state.tripA.avgSpeedKmh)} ${speedUnitLabel()} avg" else "-- ${speedUnitLabel()} avg"
         binding.tvMaxA.text = if (state.tripA.maxSpeedKmh > 0)
             "${formatSpeed(state.tripA.maxSpeedKmh)} ${speedUnitLabel()} max" else "-- ${speedUnitLabel()} max"
+        binding.imgPinA.visibility = if (state.isTripAPinned) View.VISIBLE else View.GONE
 
         // Trip B
         binding.tvDistB.text = formatDistance(state.tripB.distanceKm)

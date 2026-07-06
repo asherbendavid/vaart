@@ -36,9 +36,10 @@ class LocationService : Service() {
         const val TRIP_A_EXPIRY_MS = 30 * 60 * 1000L
         const val KEY_A_MAX_SPEED = "a_max_speed"
         const val KEY_B_MAX_SPEED = "b_max_speed"
+        const val KEY_A_PINNED = "a_pinned"
         const val KEY_ODO_DISTANCE = "odo_distance"
         const val KEY_ACTIVE_VEHICLE_ID = "active_vehicle_id"
-        const val OVERSPEED_THRESHOLD_KMH = 90f // change speed limit here
+        const val PREF_UNPIN_ON_RESET = "pref_unpin_on_reset"
         private const val ALERT_BURST_INTERVAL_MS = 600L
         private const val ALERT_REPEAT_MS = 60_000L
         var detectedUseMph: Boolean? = null // null = not yet detected, use locale fallback
@@ -135,14 +136,16 @@ class LocationService : Service() {
     private fun loadPersistedState() {
         val stopTime = prefs.getLong(KEY_A_STOP_TIME, 0L)
         val tripActive = prefs.getBoolean(KEY_TRIP_ACTIVE, false)
+        val tripAPinned = prefs.getBoolean(KEY_A_PINNED, false )
 
-        if (!tripActive && stopTime > 0 &&
+        if (!tripActive && !tripAPinned && stopTime > 0 &&
             System.currentTimeMillis() - stopTime > TRIP_A_EXPIRY_MS) {
             clearTripAPrefs()
         }
 
         _uiState.value = _uiState.value.copy(
             isRunning = tripActive,
+            isTripAPinned = tripAPinned,
             odometerKm = prefs.getFloat(KEY_ODO_DISTANCE, 0f).toDouble(),
             tripA = TripData(
                 distanceKm = prefs.getFloat(KEY_A_DISTANCE, 0f).toDouble(),
@@ -360,9 +363,21 @@ class LocationService : Service() {
         }
     }
 
+    fun setTripAPinned(pinned: Boolean) {
+        prefs.edit().putBoolean(KEY_A_PINNED, pinned).apply()
+        _uiState.value = _uiState.value.copy(isTripAPinned = pinned)
+    }
+
     fun resetTripA() {
         clearTripAPrefs()
-        _uiState.value = _uiState.value.copy(tripA = TripData())
+        val unpinOnReset = prefs.getBoolean(PREF_UNPIN_ON_RESET, true)
+        if (unpinOnReset) {
+            prefs.edit().putBoolean(KEY_A_PINNED, false).apply()
+        }
+        _uiState.value = _uiState.value.copy(
+            tripA = TripData(),
+            isTripAPinned = if (unpinOnReset) false else _uiState.value.isTripAPinned
+        )
     }
 
     fun resetTripB() {

@@ -11,5 +11,6 @@ data class UiState(
     val maxSpeedLimitKmh: Int? = null,
     val minSpeedLimitKmh: Int? = null,
     val isUnderspeed: Boolean = false,
-    val debugInfo: DebugInfo = DebugInfo()
+    val debugInfo: DebugInfo = DebugInfo(),
+    val isTripAPinned: Boolean = false,
 )
