@@ -11,6 +11,8 @@ class SpeedLimitManager(context: Context) {
 
     private val repository = SpeedLimitRepository(context)
     private var lockedWay: SpeedLimitWay? = null
+    private var failedAttempts = mutableMapOf<Pair<Int, Int>, Long>()
+    private var lastCallTime = 0L
     private var challengerWay: SpeedLimitWay? = null
     private var challengerCount: Int = 0
 
@@ -18,10 +20,11 @@ class SpeedLimitManager(context: Context) {
         private const val TILE_SIZE_DEG = 0.02       // ~2km at Western Cape latitude
         private const val TILE_EXPIRY_MS = 30L * 24 * 60 * 60 * 1000
         private const val EDGE_THRESHOLD_DEG = 0.0045 // ~500m
-        private const val MATCH_RADIUS_DEG = 0.0003   // ~30m
+        private const val MATCH_RADIUS_DEG = 0.0003   // ~30m — used for scoring/distance precision
+        private const val QUERY_RADIUS_DEG = 0.0015   // ~150m — used for candidate lookup window
         private const val MIN_BEARING_SPEED_KMH = 20.0 // below this, bearing is too noisy to use
         private const val MAX_BEARING_SPEED_KMH = 60.0 // above this, full bearing weight applied
-        private const val HYSTERESIS_THRESHOLD = 1 // updates challenger must win before switching
+        private const val HYSTERESIS_THRESHOLD = 2 // updates challenger must win before switching
         private val HIGHWAY_RANK = mapOf(
             "motorway" to 8,
             "trunk" to 7,
@@ -37,6 +40,8 @@ class SpeedLimitManager(context: Context) {
             "service" to 1
         )
         private const val CLASSIFICATION_WEIGHT = 0.3  // tunable: fraction of MATCH_RADIUS_DEG per rank step
+        private const val FAILURE_COOLDOWN_MS = 60_000L // don't retry a failed tile for 1 minute
+        private const val MIN_CALL_INTERVAL_MS = 31_000L // global spacing between any two Overpass calls
     }
 
     private fun tileKey(value: Double): Int = floor(value / TILE_SIZE_DEG).toInt()
@@ -60,6 +65,14 @@ class SpeedLimitManager(context: Context) {
         val existing = repository.getTile(latKey, lonKey)
         if (existing != null && System.currentTimeMillis() - existing.fetchedAt < TILE_EXPIRY_MS) return
 
+        val tileId = latKey to lonKey
+        val lastFailure = failedAttempts[tileId]
+        if (lastFailure != null && System.currentTimeMillis() - lastFailure < FAILURE_COOLDOWN_MS) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastCallTime < MIN_CALL_INTERVAL_MS) return
+        lastCallTime = now
+
         val south = latKey * TILE_SIZE_DEG
         val north = south + TILE_SIZE_DEG
         val west = lonKey * TILE_SIZE_DEG
@@ -68,7 +81,10 @@ class SpeedLimitManager(context: Context) {
         val ways = OverpassClient.fetchSpeedLimitWays(south, west, north, east)
         if (ways != null) {
             if (ways.isNotEmpty()) repository.insertWays(ways)
-            repository.markTileQueried(latKey, lonKey) // only mark on real success
+            repository.markTileQueried(latKey, lonKey)
+            failedAttempts.remove(tileId)
+        } else {
+            failedAttempts[tileId] = System.currentTimeMillis()
         }
     }
 
@@ -88,8 +104,8 @@ class SpeedLimitManager(context: Context) {
     /** Returns (maxSpeedKmh, minSpeedKmh) for the nearest cached road, or nulls if nothing nearby. */
     suspend fun lookupSpeedLimits(lat: Double, lon: Double, bearingDeg: Float?, speedKmh: Int, countryCode: String?): SpeedLimitMatch {
         val candidates = repository.getCandidateWays(
-            south = lat - MATCH_RADIUS_DEG, north = lat + MATCH_RADIUS_DEG,
-            west = lon - MATCH_RADIUS_DEG, east = lon + MATCH_RADIUS_DEG
+            south = lat - QUERY_RADIUS_DEG, north = lat + QUERY_RADIUS_DEG,
+            west = lon - QUERY_RADIUS_DEG, east = lon + QUERY_RADIUS_DEG
         )
 
         // Speed-scaled bearing weight: 0 below MIN speed, ramps to 1.0 at MAX speed

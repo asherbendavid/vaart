@@ -301,6 +301,7 @@ class LocationService : Service() {
                 hysteresisState = currentHysteresisState,
                 roadClassification = currentRoadClassification,
                 detectedCountry = currentCountryCode,
+                overpassStats = "${OverpassClient.callCount} calls, ${OverpassClient.successCount} ok, ${OverpassClient.failureCount} fail",
             )
         )
 

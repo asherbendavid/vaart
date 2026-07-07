@@ -7,6 +7,14 @@ import java.net.URLEncoder
 
 object OverpassClient {
 
+    // debug counters
+    var callCount = 0
+        private set
+    var successCount = 0
+        private set
+    var failureCount = 0
+        private set
+
     private const val ENDPOINT = "https://overpass-api.de/api/interpreter"
 
     /**
@@ -17,6 +25,7 @@ object OverpassClient {
      * Blocking call — must run on a background coroutine.
      */
     fun fetchSpeedLimitWays(south: Double, west: Double, north: Double, east: Double): List<SpeedLimitWay>? {
+        callCount++
         val query = """
         [out:json][timeout:25];
         (
@@ -39,12 +48,15 @@ object OverpassClient {
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 connection.disconnect()
+                failureCount++
                 return null
             }
             val responseText = connection.inputStream.bufferedReader().use { it.readText() }
             connection.disconnect()
+            successCount++
             parseResponse(responseText)
         } catch (e: Exception) {
+            failureCount++
             null
         }
     }

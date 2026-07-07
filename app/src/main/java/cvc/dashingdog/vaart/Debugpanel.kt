@@ -20,6 +20,7 @@ data class DebugInfo(
     val maxSpeedLimitKmh: Int? = null,
     val minSpeedLimitKmh: Int? = null,
     val detectedCountry: String? = null,
+    val overpassStats: String? = null,
 )
 
 /**
@@ -38,6 +39,7 @@ enum class DebugField {
     ROAD_CLASSIFICATION,
     SPEED_LIMITS,
     DETECTED_COUNTRY,
+    OVERPASS_STATS,
 }
 
 /**
@@ -50,6 +52,7 @@ val ACTIVE_DEBUG_FIELDS: Set<DebugField> = setOf(
     DebugField.WAY_NAME,
     DebugField.DETECTED_COUNTRY,
     DebugField.ROAD_CLASSIFICATION,
+    DebugField.OVERPASS_STATS,
 )
 
 /** Renders only the active, currently-available fields as one "Label: value" line each. */
@@ -91,6 +94,7 @@ object DebugPanelRenderer {
                     if (country != null) "Country: $country (${if (mph == true) "mph" else "km/h"})"
                     else "Country: not yet detected"
                 }
+                DebugField.OVERPASS_STATS -> info.overpassStats?.let { "Overpass: $it" }
             }
 
             if (line != null) lines.add(line)
