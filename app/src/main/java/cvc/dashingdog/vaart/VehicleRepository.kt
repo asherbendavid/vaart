@@ -61,4 +61,7 @@ class VehicleRepository(context: Context) {
 
     suspend fun updateTripRecord(record: TripRecord) =
         tripRecordDao.updateTripRecord(record)
+
+    suspend fun getMostRecentTripRecord(vehicleId: Int, type: String): TripRecord? =
+        tripRecordDao.getMostRecentTripRecord(vehicleId, type)
 }

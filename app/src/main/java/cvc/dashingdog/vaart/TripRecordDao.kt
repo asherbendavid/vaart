@@ -26,4 +26,7 @@ interface TripRecordDao {
 
     @Update
     suspend fun updateTripRecord(record: TripRecord)
+
+    @Query("SELECT * FROM trip_records WHERE vehicleId = :vehicleId AND type = :type ORDER BY startTime DESC LIMIT 1")
+    suspend fun getMostRecentTripRecord(vehicleId: Int, type: String): TripRecord?
 }

@@ -24,9 +24,11 @@ class TripHistoryAdapter(
         val holder = ViewHolder(binding)
         binding.root.setOnClickListener {
             val record = records[holder.adapterPosition]
-            val intent = android.content.Intent(parent.context, TripMapActivity::class.java)
-            intent.putExtra(TripMapActivity.EXTRA_TRIP_ID, record.id)
-            parent.context.startActivity(intent)
+            if (record.type == TripRecord.TYPE_TRIP) {
+                val intent = android.content.Intent(parent.context, TripMapActivity::class.java)
+                intent.putExtra(TripMapActivity.EXTRA_TRIP_ID, record.id)
+                parent.context.startActivity(intent)
+            }
         }
         return holder
     }
@@ -53,6 +55,24 @@ class TripHistoryAdapter(
                 b.tvVehicleName.setTypeface(null, Typeface.ITALIC)
             }
         }
+
+        // Record type badge
+        when (record.type) {
+            TripRecord.TYPE_TRIP_A_RESET -> {
+                b.tvRecordType.text = "THIS JOURNEY"
+                b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+            }
+            TripRecord.TYPE_TRIP_B_RESET -> {
+                b.tvRecordType.text = "SINCE REFUEL"
+                b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#06B6D4"))
+            }
+            else -> {
+                b.tvRecordType.text = "SESSION"
+                b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#888888"))
+            }
+        }
+        b.root.isClickable = record.type == TripRecord.TYPE_TRIP
+        b.root.alpha = if (record.type == TripRecord.TYPE_TRIP) 1.0f else 0.75f
 
         // Date
         b.tvDate.text = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())

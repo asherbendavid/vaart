@@ -12,5 +12,12 @@ data class TripRecord(
     val distanceKm: Double,
     val movingTimeMs: Long,
     val maxSpeedKmh: Int,
-    val notes: String? = null    // spare field — useful later, costs nothing now
-)
+    val notes: String? = null,   // spare field — useful later, costs nothing now
+    val type: String = TYPE_TRIP
+){
+    companion object {
+        const val TYPE_TRIP = "trip"
+        const val TYPE_TRIP_A_RESET = "trip_a_reset"
+        const val TYPE_TRIP_B_RESET = "trip_b_reset"
+    }
+}
