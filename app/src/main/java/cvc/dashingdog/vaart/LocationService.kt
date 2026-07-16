@@ -95,11 +95,11 @@ class LocationService : Service() {
         createNotificationChannel()
         DefaultSpeedLimits.init(this)
         startForeground(NOTIFICATION_ID, buildNotification())
+        repository = VehicleRepository(this)
+        speedLimitManager = SpeedLimitManager(this)
         loadPersistedState()
         initSoundPool()
         setupLocationUpdates()
-        repository = VehicleRepository(this)
-        speedLimitManager = SpeedLimitManager(this)
     }
 
     private fun overspeedGraceMarginKmh(): Float {
@@ -140,6 +140,31 @@ class LocationService : Service() {
 
         if (!tripActive && !tripAPinned && stopTime > 0 &&
             System.currentTimeMillis() - stopTime > TRIP_A_EXPIRY_MS) {
+            val outgoingDistance = prefs.getFloat(KEY_A_DISTANCE, 0f).toDouble()
+            if (outgoingDistance > 0.0) {
+                val outgoingTime = prefs.getLong(KEY_A_MOVING_TIME, 0L)
+                val outgoingMax = prefs.getInt(KEY_A_MAX_SPEED, 0)
+                serviceScope.launch {
+                    val lastTrip = repository.getMostRecentTripRecord(currentVehicleId, TripRecord.TYPE_TRIP)
+                    val isDuplicateOfSingleSession = lastTrip != null &&
+                            lastTrip.distanceKm == outgoingDistance &&
+                            lastTrip.movingTimeMs == outgoingTime &&
+                            lastTrip.maxSpeedKmh == outgoingMax
+                    if (!isDuplicateOfSingleSession) {
+                        repository.insertTripRecord(
+                            TripRecord(
+                                vehicleId = currentVehicleId,
+                                startTime = System.currentTimeMillis(),
+                                endTime = System.currentTimeMillis(),
+                                distanceKm = outgoingDistance,
+                                movingTimeMs = outgoingTime,
+                                maxSpeedKmh = outgoingMax,
+                                type = TripRecord.TYPE_TRIP_A_RESET
+                            )
+                        )
+                    }
+                }
+            }
             clearTripAPrefs()
         }
 
@@ -370,6 +395,29 @@ class LocationService : Service() {
     }
 
     fun resetTripA() {
+        val current = _uiState.value.tripA
+        if (current.distanceKm > 0.0) {
+            serviceScope.launch {
+                val lastTrip = repository.getMostRecentTripRecord(currentVehicleId, TripRecord.TYPE_TRIP)
+                val isDuplicateOfSingleSession = lastTrip != null &&
+                        lastTrip.distanceKm == current.distanceKm &&
+                        lastTrip.movingTimeMs == current.movingTimeMs &&
+                        lastTrip.maxSpeedKmh == current.maxSpeedKmh
+                if (!isDuplicateOfSingleSession) {
+                    repository.insertTripRecord(
+                        TripRecord(
+                            vehicleId = currentVehicleId,
+                            startTime = System.currentTimeMillis(),
+                            endTime = System.currentTimeMillis(),
+                            distanceKm = current.distanceKm,
+                            movingTimeMs = current.movingTimeMs,
+                            maxSpeedKmh = current.maxSpeedKmh,
+                            type = TripRecord.TYPE_TRIP_A_RESET
+                        )
+                    )
+                }
+            }
+        }
         clearTripAPrefs()
         val unpinOnReset = prefs.getBoolean(PREF_UNPIN_ON_RESET, true)
         if (unpinOnReset) {
@@ -382,6 +430,19 @@ class LocationService : Service() {
     }
 
     fun resetTripB() {
+        val current = _uiState.value.tripB
+        if (current.distanceKm > 0.0) {
+            val record = TripRecord(
+                vehicleId = currentVehicleId,
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis(),
+                distanceKm = current.distanceKm,
+                movingTimeMs = current.movingTimeMs,
+                maxSpeedKmh = current.maxSpeedKmh,
+                type = TripRecord.TYPE_TRIP_B_RESET
+            )
+            serviceScope.launch { repository.insertTripRecord(record) }
+        }
         prefs.edit()
             .putFloat(KEY_B_DISTANCE, 0f)
             .putLong(KEY_B_MOVING_TIME, 0L)
