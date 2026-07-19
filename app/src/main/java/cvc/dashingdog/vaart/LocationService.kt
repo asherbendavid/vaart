@@ -397,12 +397,17 @@ class LocationService : Service() {
     fun resetTripA() {
         val current = _uiState.value.tripA
         if (current.distanceKm > 0.0) {
+            val isSessionRunning = _uiState.value.isRunning
             serviceScope.launch {
-                val lastTrip = repository.getMostRecentTripRecord(currentVehicleId, TripRecord.TYPE_TRIP)
-                val isDuplicateOfSingleSession = lastTrip != null &&
-                        lastTrip.distanceKm == current.distanceKm &&
-                        lastTrip.movingTimeMs == current.movingTimeMs &&
-                        lastTrip.maxSpeedKmh == current.maxSpeedKmh
+                val isDuplicateOfSingleSession = if (isSessionRunning) {
+                    false
+                } else {
+                    val lastTrip = repository.getMostRecentTripRecord(currentVehicleId, TripRecord.TYPE_TRIP)
+                    lastTrip != null &&
+                            lastTrip.distanceKm == current.distanceKm &&
+                            lastTrip.movingTimeMs == current.movingTimeMs &&
+                            lastTrip.maxSpeedKmh == current.maxSpeedKmh
+                }
                 if (!isDuplicateOfSingleSession) {
                     repository.insertTripRecord(
                         TripRecord(
