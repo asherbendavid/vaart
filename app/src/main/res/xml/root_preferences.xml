@@ -34,6 +34,12 @@
         android:defaultValue="true" />
 
     <SwitchPreferenceCompat
+        android:key="pref_reset_tripb_on_reassign"
+        android:title="Reset Trip B for both vehicles on reassignment"
+        android:summary="Off: Trip B is kept but flagged unreliable on both vehicles until next reset"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
         android:key="pref_rotate_normal"
         android:title="Rotate display 180° (normal mode)"
         android:summary="Useful for matching charge port orientation"

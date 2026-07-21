@@ -13,4 +13,5 @@ data class UiState(
     val isUnderspeed: Boolean = false,
     val debugInfo: DebugInfo = DebugInfo(),
     val isTripAPinned: Boolean = false,
+    val isTripBUnreliable: Boolean = false,
 )

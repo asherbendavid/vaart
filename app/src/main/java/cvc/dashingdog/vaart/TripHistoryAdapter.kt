@@ -66,6 +66,10 @@ class TripHistoryAdapter(
                 b.tvRecordType.text = "SINCE REFUEL"
                 b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#06B6D4"))
             }
+            TripRecord.TYPE_VEHICLE_REASSIGNED -> {
+                b.tvRecordType.text = "REASSIGNED"
+                b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#A855F7"))
+            }
             else -> {
                 b.tvRecordType.text = "SESSION"
                 b.tvRecordType.setTextColor(android.graphics.Color.parseColor("#888888"))

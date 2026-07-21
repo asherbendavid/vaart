@@ -358,7 +358,7 @@ class LocationService : Service() {
         }
     }
 
-    fun stopTrip() {
+    fun stopTrip(): Int{
         prefs.edit()
             .putBoolean(KEY_TRIP_ACTIVE, false)
             .putLong(KEY_A_STOP_TIME, System.currentTimeMillis())
@@ -370,6 +370,7 @@ class LocationService : Service() {
         val finalState = _uiState.value
         _uiState.value = finalState.copy(isRunning = false)
 
+        val tripId = currentTripId
         if (currentTripId != -1) {
             flushPoints()
             val tripId = currentTripId
@@ -387,6 +388,7 @@ class LocationService : Service() {
             }
             currentTripId = -1
         }
+        return tripId
     }
 
     fun setTripAPinned(pinned: Boolean) {
@@ -517,13 +519,14 @@ class LocationService : Service() {
             .build()
     }
 
-    fun loadVehicleData(vehicleId: Int, odometerKm: Double, tripB: TripData) {
+    fun loadVehicleData(vehicleId: Int, odometerKm: Double, tripB: TripData, tripBUnreliable: Boolean = false) {
         currentVehicleId = vehicleId
         lastLocation = null // prevent phantom distance on switch
         val current = _uiState.value
         _uiState.value = current.copy(
             odometerKm = odometerKm,
-            tripB = tripB
+            tripB = tripB,
+            isTripBUnreliable = tripBUnreliable,
         )
         saveState(current.tripA, tripB, odometerKm)
     }

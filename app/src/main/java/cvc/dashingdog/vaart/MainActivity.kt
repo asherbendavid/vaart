@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
     private var vehicleList: List<Vehicle> = emptyList()
     private lateinit var repository: VehicleRepository
     private var isVehicleCorrectionInProgress = false
+    private var pendingCorrectionTripId: Int = -1
+    private var pendingCorrectionSessionData: TripData = TripData()
     private var stateObserverStarted = false
     private var batteryPulseAnimator: ValueAnimator? = null
     private val prefs by lazy {getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)}
@@ -508,7 +510,8 @@ class MainActivity : AppCompatActivity() {
                                     distanceKm = newVehicle.tripBDistanceKm,
                                     movingTimeMs = newVehicle.tripBMovingTimeMs,
                                     maxSpeedKmh = newVehicle.tripBMaxSpeedKmh
-                                )
+                                ),
+                                newVehicle.tripBUnreliable,
                             )
                             currentVehicleId = vehicleId
                             saveActiveVehicleId()
@@ -521,8 +524,87 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun performVehicleCorrection(newVehicle: Vehicle) {
-        // Phase 4
+    private suspend fun performVehicleCorrection(newVehicle: Vehicle) {
+        val tripId = pendingCorrectionTripId
+        val sessionData = pendingCorrectionSessionData
+        val oldVehicleId = currentVehicleId
+
+        val record = repository.getTripRecordById(tripId)
+        if (record == null) {
+            isVehicleCorrectionInProgress = false
+            return
+        }
+
+        // Reassign the session's own trip record
+        repository.updateTripRecord(record.copy(vehicleId = newVehicle.id))
+
+        // Reassign any Trip A/B reset events that happened during this session
+        val resetsInRange = repository.getResetRecordsInRange(oldVehicleId, record.startTime, record.endTime)
+        resetsInRange.forEach { reset ->
+            repository.updateTripRecord(reset.copy(vehicleId = newVehicle.id))
+        }
+
+        // Log the correction itself for a clear audit trail
+        val oldVehicleName = vehicleList.find { it.id == oldVehicleId }?.name ?: "Anonymous"
+        repository.insertTripRecord(
+            TripRecord(
+                vehicleId = newVehicle.id,
+                startTime = record.startTime,
+                endTime = record.endTime,
+                distanceKm = 0.0,
+                movingTimeMs = 0L,
+                maxSpeedKmh = 0,
+                notes = "Reassigned from $oldVehicleName",
+                type = TripRecord.TYPE_VEHICLE_REASSIGNED
+            )
+        )
+
+        // Odometer — exact transfer
+        var updatedNewVehicle = newVehicle
+        if (oldVehicleId != -1) {
+            repository.getVehicleById(oldVehicleId)?.let { oldVehicle ->
+                repository.updateVehicle(oldVehicle.copy(odometerKm = oldVehicle.odometerKm - sessionData.distanceKm))
+            }
+        }
+        updatedNewVehicle = updatedNewVehicle.copy(odometerKm = updatedNewVehicle.odometerKm + sessionData.distanceKm)
+
+        // Trip B — reset both or flag both as unreliable, per setting
+        val resetBothOnReassign = prefs.getBoolean("pref_reset_tripb_on_reassign", true)
+        if (resetBothOnReassign) {
+            if (oldVehicleId != -1) {
+                repository.getVehicleById(oldVehicleId)?.let { repository.saveTripB(it, TripData()) }
+            }
+            repository.saveTripB(updatedNewVehicle, TripData())
+        } else {
+            if (oldVehicleId != -1) {
+                repository.getVehicleById(oldVehicleId)?.let {
+                    repository.updateVehicle(it.copy(tripBUnreliable = true))
+                }
+            }
+            updatedNewVehicle = updatedNewVehicle.copy(tripBUnreliable = true)
+            repository.updateVehicle(updatedNewVehicle)
+        }
+
+        // Finalize the switch, same as a normal vehicle change
+        val finalVehicle = repository.getVehicleById(newVehicle.id) ?: updatedNewVehicle
+        isVehicleCorrectionInProgress = false
+        locationService?.loadVehicleData(
+            finalVehicle.id,
+            finalVehicle.odometerKm,
+            TripData(
+                distanceKm = finalVehicle.tripBDistanceKm,
+                movingTimeMs = finalVehicle.tripBMovingTimeMs,
+                maxSpeedKmh = finalVehicle.tripBMaxSpeedKmh
+            ),
+            finalVehicle.tripBUnreliable
+        )
+        currentVehicleId = finalVehicle.id
+        saveActiveVehicleId()
+        updateVehicleSelectorButton()
+        loadVehicleSelector()
+
+        pendingCorrectionTripId = -1
+        pendingCorrectionSessionData = TripData()
     }
 
     private fun showNewVehicleDialog(prefilledOdo: Double = 0.0, prefilledFromAnonymous: Boolean = false) {
@@ -693,11 +775,11 @@ class MainActivity : AppCompatActivity() {
         val vehicle = vehicleList.find { it.id == currentVehicleId }
         val vehicleName = vehicle?.name ?: "Anonymous"
         val vehicleReg = vehicle?.registration
-        svc.stopTrip()
-        showSessionSummaryDialog(thisSessionData, vehicleName, vehicleReg)
+        val tripId = svc.stopTrip()
+        showSessionSummaryDialog(thisSessionData, vehicleName, vehicleReg, tripId)
     }
 
-    private fun showSessionSummaryDialog(tripA: TripData, vehicleName: String, vehicleReg: String?) {
+    private fun showSessionSummaryDialog(tripA: TripData, vehicleName: String, vehicleReg: String?, tripId: Int) {
         val regLine = if (!vehicleReg.isNullOrEmpty()) "\nRegistration: $vehicleReg" else ""
         val unit = speedUnitLabel()
         val message = buildString {
@@ -708,11 +790,11 @@ class MainActivity : AppCompatActivity() {
             append("Max speed: ${if (tripA.maxSpeedKmh > 0) "${formatSpeed(tripA.maxSpeedKmh)} $unit" else "--"}")
         }
 
-        val changeEnabled = false /* disabled until phase 5 when {
+        val changeEnabled = when {
             vehicleList.isEmpty() -> false
             vehicleList.size == 1 && vehicleList[0].id == currentVehicleId -> false
             else -> true
-        } */
+        }
 
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Session Complete")
@@ -725,6 +807,8 @@ class MainActivity : AppCompatActivity() {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).apply {
                 isEnabled = changeEnabled
                 setOnClickListener {
+                    pendingCorrectionTripId = tripId
+                    pendingCorrectionSessionData = tripA
                     dialog.dismiss()
                     showVehicleChangePicker()
                 }
@@ -829,6 +913,7 @@ class MainActivity : AppCompatActivity() {
             "${formatSpeed(state.tripB.avgSpeedKmh)} ${speedUnitLabel()} avg" else "-- ${speedUnitLabel()} avg"
         binding.tvMaxB.text = if (state.tripB.maxSpeedKmh > 0)
             "${formatSpeed(state.tripB.maxSpeedKmh)} ${speedUnitLabel()} max" else "-- ${speedUnitLabel()} max"
+        binding.tvTripBUnreliable.visibility = if (state.isTripBUnreliable) View.VISIBLE else View.GONE
 
         binding.btnVehicleSelector.isEnabled = !state.isRunning
         binding.btnVehicleSelector.setTextColor(

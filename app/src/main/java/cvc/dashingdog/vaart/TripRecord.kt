@@ -19,5 +19,6 @@ data class TripRecord(
         const val TYPE_TRIP = "trip"
         const val TYPE_TRIP_A_RESET = "trip_a_reset"
         const val TYPE_TRIP_B_RESET = "trip_b_reset"
+        const val TYPE_VEHICLE_REASSIGNED = "vehicle_reassigned"
     }
 }

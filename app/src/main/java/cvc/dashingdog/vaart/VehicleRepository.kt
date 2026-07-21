@@ -27,13 +27,14 @@ class VehicleRepository(context: Context) {
         )
     }
 
-    suspend fun saveTripB(vehicle: Vehicle, tripB: TripData) {
+    suspend fun saveTripB(vehicle: Vehicle, tripB: TripData, unreliable: Boolean = false) {
         dao.updateVehicle(
             vehicle.copy(
                 tripBDistanceKm = tripB.distanceKm,
                 tripBMovingTimeMs = tripB.movingTimeMs,
                 tripBMaxSpeedKmh = tripB.maxSpeedKmh,
-                lastUsedAt = System.currentTimeMillis()
+                tripBUnreliable = unreliable,
+                lastUsedAt = System.currentTimeMillis(),
             )
         )
     }
@@ -64,4 +65,7 @@ class VehicleRepository(context: Context) {
 
     suspend fun getMostRecentTripRecord(vehicleId: Int, type: String): TripRecord? =
         tripRecordDao.getMostRecentTripRecord(vehicleId, type)
+
+    suspend fun getResetRecordsInRange(vehicleId: Int, start: Long, end: Long): List<TripRecord> =
+        tripRecordDao.getResetRecordsInRange(vehicleId, start, end)
 }

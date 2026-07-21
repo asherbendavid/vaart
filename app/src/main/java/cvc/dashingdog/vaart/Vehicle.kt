@@ -15,5 +15,6 @@ data class Vehicle(
     val tripBMovingTimeMs: Long = 0L,
     val tripBMaxSpeedKmh: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val lastUsedAt: Long = System.currentTimeMillis()
+    val lastUsedAt: Long = System.currentTimeMillis(),
+    val tripBUnreliable: Boolean = false,
 )

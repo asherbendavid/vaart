@@ -29,4 +29,7 @@ interface TripRecordDao {
 
     @Query("SELECT * FROM trip_records WHERE vehicleId = :vehicleId AND type = :type ORDER BY startTime DESC LIMIT 1")
     suspend fun getMostRecentTripRecord(vehicleId: Int, type: String): TripRecord?
+
+    @Query("SELECT * FROM trip_records WHERE vehicleId = :vehicleId AND type != 'trip' AND type != 'vehicle_reassigned' AND startTime BETWEEN :start AND :end")
+    suspend fun getResetRecordsInRange(vehicleId: Int, start: Long, end: Long): List<TripRecord>
 }
