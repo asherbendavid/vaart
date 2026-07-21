@@ -6,7 +6,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ---
 
-## Current Features (v2.4.0+, Phase 6 complete)
+## Current Features (Phase 7 complete)
 
 - **Live speed display** — GPS-based, landscape locked, screen always on
 - **GPS accuracy indicator** — Good / Fair / Weak with colour coding
@@ -14,7 +14,9 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - **On-screen clock**
 - **Odometer** — persistent, zero-padded six-digit display with thousands separator, per-vehicle
 - **Trip A — this journey** — distance, moving time, average speed, max speed. Auto-clears after 30 minutes of inactivity. Manual reset available. Tracked independently from the finalised trip record, so mid-trip resets or carry-over never corrupt history.
-- **Trip B — since refuel** — same metrics, manual reset only, persists across app restarts, per-vehicle, immediately written to the database on reset
+  - **Pin Trip A** — bypasses the 30-minute idle auto-clear for long road trips, toggled from the main menu (checkmark shown via a forced-icon workaround, since native `PopupMenu` checkmarks render inconsistently across OEMs). A passive pin icon appears beneath Reset A only while pinned. A confirmation prompt guards any reset attempt while pinned. "Unpin on reset" is separately configurable in Settings (default on)
+- **Trip B — since refuel** — same metrics, manual reset only, persists across app restarts, per-vehicle, immediately written to the database on reset. Reset carries an unconditional confirmation prompt (Trip B has no pin state — it's treated as always "pinned" by design)
+  - **Unreliable flag** — set automatically when a vehicle reassignment leaves Trip B numbers un-reconciled (see Vehicle correction below); shown as a 🚫 next to Trip B on the main screen, clears itself the next time Trip B is genuinely reset
 - **HUD mirror mode** — flips the display horizontally for windscreen (or daytime perspex reflector) projection, disables reset/menu buttons while active
 - **Independent 180° display rotation** — separate settings for normal mode and HUD mode, useful for matching the phone's charge-port orientation to how it's mounted. Implemented via real device orientation (`requestedOrientation`/`SCREEN_ORIENTATION_REVERSE_LANDSCAPE`), not a view transform — this matters because dialogs, popup menus, and the system status bar all rotate consistently along with the app content. *(An earlier attempt using `View.rotation` looked correct on the main screen but left dialogs/popups upside-down, since that approach only transforms the app's own view hierarchy, not system-drawn overlay windows — reverted and rebuilt on a branch.)*
 - Moving time pauses automatically after 3 minutes below threshold speed
@@ -30,11 +32,14 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
   - Manage vehicles screen: edit details (name/registration/notes/odometer) or delete, with optional plain-text export before removal
   - Standalone odometer correction via long-press, outside of an active session
   - Session-end summary dialog showing the just-completed trip's stats
+  - **Vehicle correction from the session summary** — "Change vehicle" reassigns a just-completed session (and any Trip A/B resets that occurred during it) to a different vehicle after the fact. Odometer is transferred exactly (subtracted from the old vehicle, added to the new one). Trip B is deliberately *not* arithmetically reconciled between vehicles — an earlier subtract/recompute design was rejected as too fragile against future record deletion (Phase 7.4) — instead, a Settings toggle (default on) either resets Trip B outright on both vehicles, or leaves both untouched and flags both unreliable (including the source vehicle, since its own Trip B can't be guaranteed unaffected — e.g. a Trip B reset that happened mid-trip, before the reassignment). A `vehicle_reassigned` audit entry is logged in trip history either way
 - **Trip history**
   - Every session is logged as a `TripRecord` with full route (`TripPoint` list) once stopped
   - Dedicated portrait history screen, dark themed, listing all recorded trips with vehicle, date, distance, duration, average/max speed
   - Tapping a trip opens a route map (OSMDroid) with the recorded path drawn as a polyline, auto-zoomed to fit
   - Gracefully handles trips with no stored route points (e.g. interrupted sessions) with a clear explanatory message instead of a blank/broken map
+  - **Trip A/B resets logged as their own history entries** — a `TripRecord.type` field (`trip` / `trip_a_reset` / `trip_b_reset` / `vehicle_reassigned`) distinguishes a normal drive from a reset or reassignment event. Each type renders a distinct colour-coded badge (matching Trip A/B's on-screen colours) in the history list. A Trip A reset that exactly matches the immediately preceding trip is deliberately *not* double-logged — a decluttering decision, not a bug (see Help Screen Content Notes)
+  - **Swipe-to-delete** individual records, either direction, with a confirmation prompt before the delete actually commits; cancelling restores the swiped item
 - **Speed limit alerts — independently configurable indicators**
   - Three separate toggles, each defaulting on: **audible alert**, **underline indicator** (coloured line under the breached sign), **sign opacity indicator** (sign jumps to fully opaque on breach)
   - **Sign base opacity** is a separate slider (0–100%), independent of whether the opacity *indicator* is enabled — so a user can keep signs permanently dimmed even with dynamic opacity switched off
@@ -102,14 +107,18 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] Debug panel infrastructure — `DebugPanel.kt` with `DebugInfo` data class, `DebugField` enum, `ACTIVE_DEBUG_FIELDS` compile-time selector, and `DebugPanelRenderer`; full-width 20% strip reserved in `activity_main.xml` as foundation for Phase 11 swipeable secondary widget
 - [x] ⚠️ Resolved/no longer open: the previously-flagged "📍 pin" question from an earlier session was a small mph-rounding fix (round-up via `ceil()`), already shipped in Phase 5b — no outstanding open question carried into Phase 6
 
-### Phase 7 — Trip Data Integrity (Planned, next)
-- [ ] "Pin Trip A" toggle for long road trips — bypasses the 30-minute idle expiry, with a passive on-screen indicator and a confirmation step before any reset while pinned
-- [ ] Vehicle correction from the session summary screen — lets a session started under the wrong vehicle be reassigned after the fact (selection menu, confirmation prompt, and verification that data is committed to the correct record)
-- [ ] Trip counter resets (Trip A/B) logged as their own history entries, giving a complete refuel-to-refuel distance log
-- [ ] Delete individual trip records from the history screen
+### Phase 7 — Trip Data Integrity ✅ Complete
+- [x] **7.1 — Pin Trip A** — toggle bypasses the 30-minute idle auto-clear; passive pin icon indicator; confirmation guard on any reset attempt while pinned; menu checkmark rendering required a `forceShowIcon` workaround since native `PopupMenu` checkmarks are unreliable across OEMs; "Unpin on reset" separately configurable
+- [x] **7.2 — Vehicle correction from session summary** — "Change vehicle" reassigns a just-completed session, plus any Trip A/B resets that occurred during it, to a different vehicle. Odometer transferred exactly. Trip B intentionally not reconciled via arithmetic (rejected as fragile against future record deletion) — a Settings toggle either resets Trip B outright on both vehicles, or leaves both untouched and flags both unreliable (🚫 shown until next genuine reset). A `vehicle_reassigned` audit entry is logged either way
+- [x] **7.3 — Trip counter resets logged as history entries** — `TripRecord.type` field distinguishes normal trips from Trip A/B resets and reassignments; each renders a distinct colour-coded badge in trip history; single-session Trip A resets are deliberately not double-logged
+- [x] **7.4 — Delete individual trip records** — swipe-to-delete (either direction) with confirmation before commit; cancelling restores the item
+- [x] (Unplanned but completed along the way) Fixed a `LocationService.onCreate()` initialization-order bug where `repository`/`speedLimitManager` were assigned after `loadPersistedState()`, silently breaking the auto-clear path's history logging
+- [x] (Unplanned but completed along the way) Diagnosed and fixed an Overpass API retry-storm bug — failed tile fetches were retried on every GPS fix with no backoff, capable of exhausting the public rate limit within minutes and cascading into total data loss even in well-mapped areas. Fixed via a per-tile failure cooldown plus a global inter-call throttle respecting Overpass's 2-slot concurrency limit. A related narrow-candidate-radius bug (causing speed-limit/way-name flicker at highway speeds) was found and fixed in the same investigation
 
-### Phase 8 — "Forgot to Press Start" Nudge (Planned)
+### Phase 8 — "Forgot to Press Start" Nudge (Planned, next)
 - [ ] While the app is in the foreground and no session is active, detect sustained speed above a configurable threshold and prompt the user with a sound and a pulsing Start button
+- [ ] Threshold configurable in Settings, default 10 km/h, stored unit-agnostic and converted at the comparison/display point (same pattern as the overspeed grace margin) — so a manual unit change or a "Follow region" cross-border trip never leaves the setting silently out of sync with the unit actually shown
+- [ ] Separate Settings toggle to disable the nudge entirely
 
 ### Phase 9 — GPX Export (Planned)
 - [ ] GPX export from the trip map screen
@@ -124,6 +133,14 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [ ] Help screen — see **Help Screen Content Notes** below for material already drafted during development
 - [ ] About screen
 
+### Future — Trip History Polish
+- [ ] Swipe-to-delete visual feedback — coloured reveal background (red) with a trash icon during the drag, via `ItemTouchHelper.onChildDraw()`. Deliberately deferred from Phase 7.4 to keep single-delete shippable on its own
+- [ ] Multi-select delete — long-press to enter selection mode, tap to add/remove records, "Select all" and a contextual delete action. Needs per-item selection state in `TripHistoryAdapter` and either a custom `ActionMode` or a swappable toolbar state
+
+### Future — Display & Layout
+- [ ] **User-configurable visible elements** — independently toggleable: trip counters, media/weather bar, speed limit indicators (disabling also automatically disables the alerts tied to them). Prerequisite groundwork for the map idea below, since it turns the display from a fixed layout into reclaimable space
+- [ ] **Local road map on the main display** — shown in place of the trip counter frame when selected/activated for a trip. OSMDroid is already a project dependency (used for trip route maps), so no new library needed, but a live-updating map is a meaningfully heavier widget than anything currently on the main screen — real screen-real-estate and performance tradeoffs to work through, hence gated behind the configurable-elements work above
+
 ### Future — Optimisation
 - [ ] Further GPS battery tuning — lower-frequency location updates when idle outside of a session
 
@@ -137,6 +154,8 @@ Material worth carrying into the eventual help screen, captured while fresh duri
 - **The overspeed grace margin accepts negative values as an early-warning feature**, not just a tolerance buffer — e.g. "-5" triggers all indicators (audible, line, opacity) 5 km/h (or mph) *before* the posted limit is reached, for drivers who want advance notice rather than a tolerance margin.
 - **Known cosmetic limitation:** none currently outstanding for rotation/status-bar (the original `View.rotation` notification-shade quirk was resolved by switching to real device orientation) — revisit this note if a future change reintroduces transform-based UI tricks.
 - **Sign opacity and the opacity *indicator* toggle are independent settings.** The base opacity slider always applies; the toggle only controls whether opacity *additionally* jumps to 100% on a breach.
+- **A Trip A reset that exactly matches the most recent trip isn't logged as a separate history entry.** If Trip A was reset after only one uninterrupted session (nothing to distinguish it from the trip record already saved), logging a second identical entry would just be clutter — this is a deliberate decluttering decision, not a missed reset. A reset *during* an active session (before the trip stops and its own record exists) is always logged, since there's nothing yet to be a duplicate of.
+- **A vehicle correction's Trip B outcome depends on a Settings toggle, not automatic reconciliation.** With "Reset Trip B for both vehicles on reassignment" on (default), both vehicles get a clean Trip B after a correction. With it off, both vehicles keep their existing Trip B numbers unchanged but are flagged 🚫 unreliable — including the vehicle the session is *moved from*, since its Trip B can't be guaranteed unaffected either (e.g. if Trip B was reset mid-trip before the correction happened). The flag clears itself automatically the next time Trip B is genuinely reset on that vehicle.
 
 ---
 
@@ -147,7 +166,7 @@ Material worth carrying into the eventual help screen, captured while fresh duri
 - **Background tracking:** Foreground Service with persistent notification; lifecycle-tied to focus + active session state rather than running indefinitely
 - **Mapping:** OSMDroid (no API key required) for trip route display
 - **Speed limit data:** OpenStreetMap, queried via the Overpass API, cached locally in Room with a tile-based system to minimise live network calls. Matching pipeline: nearest-segment distance → bearing-weighted scoring → hysteresis lock → road classification tiebreaker. Untagged roads resolved via bundled `highway_speed_defaults.json` (country + highway type → km/h). Country detected via Nominatim reverse geocoding (`CountryDetector`), cached 30 days, device locale fallback
-- **Room DB version:** 7 (current). Schema includes `speed_limit_ways` (osmWayId, name, roadClassification, geometry, speed tags), `queried_tiles`, `vehicles`, `trip_records`, `trip_points`. `fallbackToDestructiveMigration()` is in place — the speed-limit cache is re-fetchable and safe to wipe on schema changes
+- **Room DB version:** 9 (current). Schema includes `speed_limit_ways` (osmWayId, name, roadClassification, geometry, speed tags), `queried_tiles`, `vehicles` (now including `tripBUnreliable`), `trip_records` (now including a `type` discriminator: `trip` / `trip_a_reset` / `trip_b_reset` / `vehicle_reassigned`), `trip_points`. `fallbackToDestructiveMigration()` is in place — the speed-limit cache is re-fetchable and safe to wipe on schema changes; real vehicle/trip data has been carried through each Phase 7 bump without loss so far, but this remains a known risk to revisit if a future schema change needs to preserve data more deliberately
 - **Debug panel:** `DebugPanel.kt` provides a `DebugField` enum, `ACTIVE_DEBUG_FIELDS` set (edit before each test build to select which fields render), and `DebugPanelRenderer`. Panel occupies the bottom 20% of the display in a `FrameLayout` container sized for Phase 11's future swipeable widget
 - **Settings:** `androidx.preference`, backed by the same `vaart_prefs` SharedPreferences file used elsewhere in the app. Settings that affect live on-screen state (battery %, status bar, audio channel, HUD rotation/mirror) are re-applied in `onResume()`/`onWindowFocusChanged()`, not just at cold start, so changes take effect immediately on returning from Settings rather than waiting for an unrelated future event
 - **Speed/distance unit conversion:** centralised in `SpeedUnitFormatter`, a single shared object read by every screen that displays speed, distance, or odometer values — avoids duplicating unit-conversion logic per activity. mph/mile conversions round up rather than truncate. `unitConversionFactor()` exposes the raw conversion multiplier for settings (like the grace margin) that need to convert a unit-agnostic stored value rather than format a display string
