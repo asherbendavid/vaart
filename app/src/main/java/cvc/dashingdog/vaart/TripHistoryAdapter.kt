@@ -10,7 +10,7 @@ import java.util.Date
 import java.util.Locale
 
 class TripHistoryAdapter(
-    private val records: List<TripRecord>,
+    private val records: MutableList<TripRecord>,
     private val vehicleNames: Map<Int, String>
 ) : RecyclerView.Adapter<TripHistoryAdapter.ViewHolder>() {
 
@@ -34,6 +34,13 @@ class TripHistoryAdapter(
     }
 
     override fun getItemCount() = records.size
+
+    fun getItem(position: Int): TripRecord = records[position]
+
+    fun removeItem(position: Int) {
+        records.removeAt(position)
+        notifyItemRemoved(position)
+    }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val record = records[position]
