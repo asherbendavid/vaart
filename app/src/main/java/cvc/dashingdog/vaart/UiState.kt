@@ -14,4 +14,5 @@ data class UiState(
     val debugInfo: DebugInfo = DebugInfo(),
     val isTripAPinned: Boolean = false,
     val isTripBUnreliable: Boolean = false,
+    val showStartNudge: Boolean = false,
 )

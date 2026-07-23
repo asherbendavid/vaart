@@ -70,6 +70,7 @@ class LocationService : Service() {
     private var currentVehicleId: Int = -1  // kept in sync via a new setter
     private lateinit var soundPool: SoundPool
     private var alertSoundId: Int = 0
+    private var nudgeSoundId: Int = 0
     private val alertHandler = Handler(Looper.getMainLooper())
     private var lastAlertTime = 0L
     private var alertBurstCount = 0
@@ -88,6 +89,8 @@ class LocationService : Service() {
     private var currentHysteresisState: String? = null
     private var currentRoadClassification: String? = null
     private var currentCountryCode: String? = null
+    private var nudgeConsecutiveCount = 0
+    private var nudgeAlreadyFiredThisStop = false
 
     override fun onCreate() {
         super.onCreate()
@@ -106,6 +109,12 @@ class LocationService : Service() {
         val raw = prefs.getString("pref_overspeed_grace_value", "0")?.toFloatOrNull() ?: 0f
         return raw * SpeedUnitFormatter.unitConversionFactor(this).toFloat()
     }
+
+    private fun nudgeThresholdKmh(): Float{
+        val raw = prefs.getString("pref_nudge_threshold_value", "10")?.toFloatOrNull() ?: 10f
+        return raw * SpeedUnitFormatter.unitConversionFactor(this).toFloat()
+    }
+
     private fun resolveAlertUsage(): Int {
         return when (prefs.getString("pref_audio_channel", "alarm")) {
             "notification" -> AudioAttributes.USAGE_NOTIFICATION
@@ -125,6 +134,7 @@ class LocationService : Service() {
             .setAudioAttributes(audioAttributes)
             .build()
         alertSoundId = soundPool.load(this, R.raw.overspeed_alert, 1)
+        nudgeSoundId = soundPool.load(this, R.raw.nudge_alert,1)
     }
 
     /** Called when the audio channel setting changes while the service is already running. */
@@ -302,6 +312,20 @@ class LocationService : Service() {
         if (isUnderSpeed && !wasUnderspeed) triggerUnderspeedAlert()
         wasUnderspeed = isUnderSpeed
 
+        if (!_uiState.value.isRunning && prefs.getBoolean("pref_nudge_enabled", true)) {
+            val nudgeThreshold = nudgeThresholdKmh()
+            if (speedKmhFloat > nudgeThreshold) {
+                nudgeConsecutiveCount++
+                if (nudgeConsecutiveCount >= 3 && !nudgeAlreadyFiredThisStop) {
+                    nudgeAlreadyFiredThisStop = true
+                    soundPool.play(nudgeSoundId, 1f, 1f, 0, 0, 1f)
+                }
+            } else {
+                nudgeConsecutiveCount = 0
+            }
+        }
+        val showStartNudge = !_uiState.value.isRunning && nudgeAlreadyFiredThisStop
+
         lastLocation = location
         _uiState.value = _uiState.value.copy(
             speedKmh = displaySpeed,
@@ -311,6 +335,7 @@ class LocationService : Service() {
             odometerKm = newOdo,
             isOverspeed = isOverSpeed,
             isUnderspeed = isUnderSpeed,
+            showStartNudge = showStartNudge,
             maxSpeedLimitKmh = currentMaxSpeedLimit,
             minSpeedLimitKmh = currentMinSpeedLimit,
             debugInfo = DebugInfo(
@@ -343,7 +368,9 @@ class LocationService : Service() {
         lastUpdateTime = 0L
         isMoving = false
         belowThresholdSince = 0L
-        _uiState.value = _uiState.value.copy(isRunning = true)
+        nudgeConsecutiveCount = 0
+        nudgeAlreadyFiredThisStop = false
+        _uiState.value = _uiState.value.copy(isRunning = true, showStartNudge = false)
 
         serviceScope.launch {
             val record = TripRecord(
@@ -365,6 +392,8 @@ class LocationService : Service() {
             .apply()
         isMoving = false
         belowThresholdSince = 0L
+        nudgeAlreadyFiredThisStop = false
+        nudgeConsecutiveCount = 0 // reset here probably not needed, but very low cost and no negative side effects possible
         lastLocation = null
 
         val finalState = _uiState.value

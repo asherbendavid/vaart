@@ -50,6 +50,17 @@
         android:summary="Useful for matching charge port orientation"
         android:defaultValue="false" />
 
+    <SwitchPreferenceCompat
+        android:key="pref_nudge_enabled"
+        android:title="Forgot-to-start nudge"
+        android:summary="Prompt to start a session when moving without one active"
+        android:defaultValue="true" />
+
+    <EditTextPreference
+        android:key="pref_nudge_threshold_value"
+        android:title="Nudge speed threshold"
+        android:defaultValue="10" />
+
     <ListPreference
         android:key="pref_audio_channel"
         android:title="Alert sound channel"

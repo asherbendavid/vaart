@@ -37,6 +37,8 @@ import java.util.Locale
 import androidx.appcompat.app.AlertDialog
 import kotlinx.coroutines.suspendCancellableCoroutine
 
+private const val nudgeTransitionDelay = 4000L
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -51,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingCorrectionSessionData: TripData = TripData()
     private var stateObserverStarted = false
     private var batteryPulseAnimator: ValueAnimator? = null
+    private var nudgePulseAnimator: ValueAnimator? = null
     private val prefs by lazy {getSharedPreferences(LocationService.PREFS_NAME, MODE_PRIVATE)}
     private val tickReceiver = object: BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -896,6 +899,7 @@ class MainActivity : AppCompatActivity() {
             if (state.isRunning) Color.parseColor("#450E0E")
             else Color.parseColor("#0E4520")
         )
+        if (state.showStartNudge) startNudgePulse() else stopNudgePulse()
 
         // Trip A
         binding.tvDistA.text = formatDistance(state.tripA.distanceKm)
@@ -991,6 +995,37 @@ class MainActivity : AppCompatActivity() {
         batteryPulseAnimator?.cancel()
         batteryPulseAnimator = null
         (binding.batteryShell.background as? GradientDrawable)?.setColor(Color.TRANSPARENT)
+    }
+
+    private fun startNudgePulse() {
+        if (nudgePulseAnimator != null) return
+        runNudgePulsePhase(bright = true)
+        binding.btnStartStop.postDelayed({
+            if (nudgePulseAnimator != null) runNudgePulsePhase(bright = false)
+        }, nudgeTransitionDelay)
+    }
+
+    private fun runNudgePulsePhase(bright: Boolean) {
+        nudgePulseAnimator?.cancel()
+        val color = if (bright) Color.parseColor("#39FF14") else Color.parseColor("#22C55E")
+        val (minAlpha, maxAlpha) = if (bright) 40 to 255 else 100 to 200
+        val duration = if (bright) 350L else 700L
+        nudgePulseAnimator = ValueAnimator.ofInt(minAlpha, maxAlpha).apply {
+            this.duration = duration
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                val alpha = anim.animatedValue as Int
+                val r = Color.red(color); val g = Color.green(color); val b = Color.blue(color)
+                binding.btnStartStop.backgroundTintList = ColorStateList.valueOf(Color.argb(alpha, r, g, b))
+            }
+            start()
+        }
+    }
+
+    private fun stopNudgePulse() {
+        nudgePulseAnimator?.cancel()
+        nudgePulseAnimator = null
     }
 
     override fun onResume() {

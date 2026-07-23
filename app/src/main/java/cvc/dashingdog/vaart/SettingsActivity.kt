@@ -45,6 +45,20 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }
+            findPreference<EditTextPreference>("pref_nudge_threshold_value")?.apply {
+                setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_NUMBER }
+                summaryProvider = Preference.SummaryProvider<EditTextPreference> { pref ->
+                    val value = pref.text?.toFloatOrNull() ?: 10f
+                    val unit = SpeedUnitFormatter.unitLabel(requireContext())
+                    "Nudges to start when moving above ${value.toInt()} $unit"
+                }
+            }
+            preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener { _, key ->
+                if (key == "pref_speed_unit") {
+                    findPreference<EditTextPreference>("pref_overspeed_grace_value")?.let { it.text = it.text }
+                    findPreference<EditTextPreference>("pref_nudge_threshold_value")?.let { it.text = it.text }
+                }
+            }
         }
     }
 
