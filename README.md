@@ -6,7 +6,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ---
 
-## Current Features (Phase 7 complete)
+## Current Features (Phase 8 complete)
 
 - **Live speed display** — GPS-based, landscape locked, screen always on
 - **GPS accuracy indicator** — Good / Fair / Weak with colour coding
@@ -115,12 +115,15 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] (Unplanned but completed along the way) Fixed a `LocationService.onCreate()` initialization-order bug where `repository`/`speedLimitManager` were assigned after `loadPersistedState()`, silently breaking the auto-clear path's history logging
 - [x] (Unplanned but completed along the way) Diagnosed and fixed an Overpass API retry-storm bug — failed tile fetches were retried on every GPS fix with no backoff, capable of exhausting the public rate limit within minutes and cascading into total data loss even in well-mapped areas. Fixed via a per-tile failure cooldown plus a global inter-call throttle respecting Overpass's 2-slot concurrency limit. A related narrow-candidate-radius bug (causing speed-limit/way-name flicker at highway speeds) was found and fixed in the same investigation
 
-### Phase 8 — "Forgot to Press Start" Nudge (Planned, next)
-- [ ] While the app is in the foreground and no session is active, detect sustained speed above a configurable threshold and prompt the user with a sound and a pulsing Start button
-- [ ] Threshold configurable in Settings, default 10 km/h, stored unit-agnostic and converted at the comparison/display point (same pattern as the overspeed grace margin) — so a manual unit change or a "Follow region" cross-border trip never leaves the setting silently out of sync with the unit actually shown
-- [ ] Separate Settings toggle to disable the nudge entirely
+### Phase 8 — "Forgot to Press Start" Nudge ✅ Complete
+- [x] While the app is in the foreground and no session is active, detect sustained speed above a configurable threshold and prompt the user with a sound and a pulsing Start button. "Sustained" defined as 3 consecutive location fixes above threshold (~3s at the current 1s fix interval)
+- [x] Threshold configurable in Settings, default 10 km/h, stored unit-agnostic and converted at the comparison/display point (same pattern as the overspeed grace margin) — so a manual unit change or a "Follow region" cross-border trip never leaves the setting silently out of sync with the unit actually shown
+- [x] Separate Settings toggle to disable the nudge entirely
+- [x] Nudge fires once per stopped period, not once per app session — resets on both trip start and trip stop, so stopping for fuel/a rest and setting off again correctly re-arms it
+- [x] Two-phase Start button pulse — ~4s of an attention-grabbing bright green, settling into the existing GPS-good green indefinitely until a session starts, so it doesn't keep demanding attention if driving untracked is deliberate
+- [x] (Unplanned but completed along the way) Fixed a pre-existing bug where the overspeed grace margin's Settings summary didn't refresh on a manual unit change until the Settings screen was reopened
 
-### Phase 9 — GPX Export (Planned)
+### Phase 9 — GPX Export (Planned, Next)
 - [ ] GPX export from the trip map screen
 
 ### Phase 10 — Picture-in-Picture (Planned)
@@ -156,6 +159,8 @@ Material worth carrying into the eventual help screen, captured while fresh duri
 - **Sign opacity and the opacity *indicator* toggle are independent settings.** The base opacity slider always applies; the toggle only controls whether opacity *additionally* jumps to 100% on a breach.
 - **A Trip A reset that exactly matches the most recent trip isn't logged as a separate history entry.** If Trip A was reset after only one uninterrupted session (nothing to distinguish it from the trip record already saved), logging a second identical entry would just be clutter — this is a deliberate decluttering decision, not a missed reset. A reset *during* an active session (before the trip stops and its own record exists) is always logged, since there's nothing yet to be a duplicate of.
 - **A vehicle correction's Trip B outcome depends on a Settings toggle, not automatic reconciliation.** With "Reset Trip B for both vehicles on reassignment" on (default), both vehicles get a clean Trip B after a correction. With it off, both vehicles keep their existing Trip B numbers unchanged but are flagged 🚫 unreliable — including the vehicle the session is *moved from*, since its Trip B can't be guaranteed unaffected either (e.g. if Trip B was reset mid-trip before the correction happened). The flag clears itself automatically the next time Trip B is genuinely reset on that vehicle.
+- **The nudge threshold's unit (km/h vs mph) can, in one narrow edge case, momentarily fall out of sync with what's on screen.** If "Follow region" is selected and the Settings screen happens to be open while crossing a border that changes the expected unit, the displayed threshold summary won't live-update — unlike a manual unit change in Settings, which does. This is an accepted, deliberately unhandled gap: anyone actively looking at Settings is either about to set the unit manually themselves (no problem), or would find a spontaneous mid-scroll unit change more confusing than reassuring. The underlying value is never wrong, only its Settings-screen display can lag until the screen is reopened.
+- **The anonymous vehicle exists precisely for untracked driving** — running outside of a session (and dismissing or ignoring the "forgot to start" nudge) isn't a mistake to be corrected, it's a legitimate, supported way to use the app. The nudge's second pulse phase is deliberately calmer for this reason: a reminder, not a nag.
 
 ---
 
