@@ -6,7 +6,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 
 ---
 
-## Current Features (Phase 8 complete)
+## Current Features (Phase 9 complete)
 
 - **Live speed display** — GPS-based, landscape locked, screen always on
 - **GPS accuracy indicator** — Good / Fair / Weak with colour coding
@@ -40,6 +40,7 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
   - Gracefully handles trips with no stored route points (e.g. interrupted sessions) with a clear explanatory message instead of a blank/broken map
   - **Trip A/B resets logged as their own history entries** — a `TripRecord.type` field (`trip` / `trip_a_reset` / `trip_b_reset` / `vehicle_reassigned`) distinguishes a normal drive from a reset or reassignment event. Each type renders a distinct colour-coded badge (matching Trip A/B's on-screen colours) in the history list. A Trip A reset that exactly matches the immediately preceding trip is deliberately *not* double-logged — a decluttering decision, not a bug (see Help Screen Content Notes)
   - **Swipe-to-delete** individual records, either direction, with a confirmation prompt before the delete actually commits; cancelling restores the swiped item
+  - **GPX export** — "Share GPX" on the trip map screen exports the viewed trip's route as a GPX 1.1 file (vehicle, device, distance/time/speed in the description) and hands it to the system share sheet; general-purpose, not tied to a specific destination app
 - **Speed limit alerts — independently configurable indicators**
   - Three separate toggles, each defaulting on: **audible alert**, **underline indicator** (coloured line under the breached sign), **sign opacity indicator** (sign jumps to fully opaque on breach)
   - **Sign base opacity** is a separate slider (0–100%), independent of whether the opacity *indicator* is enabled — so a user can keep signs permanently dimmed even with dynamic opacity switched off
@@ -123,8 +124,14 @@ A GPS-based speedometer and trip computer for Android, built in Kotlin.
 - [x] Two-phase Start button pulse — ~4s of an attention-grabbing bright green, settling into the existing GPS-good green indefinitely until a session starts, so it doesn't keep demanding attention if driving untracked is deliberate
 - [x] (Unplanned but completed along the way) Fixed a pre-existing bug where the overspeed grace margin's Settings summary didn't refresh on a manual unit change until the Settings screen was reopened
 
-### Phase 9 — GPX Export (Planned, Next)
-- [ ] GPX export from the trip map screen
+### Phase 9 — GPX Export ✅ Complete
+- [x] "Share GPX" button on the trip map screen exports the currently-viewed trip's recorded points as a GPX 1.1 file and hands it to the system share sheet (WhatsApp, LocalSend, Drive, etc.) — general-purpose by design, not tied to any one destination app
+- [x] `TripPointsToGpxWriter` — pure Kotlin, no Android framework dependency — builds `<metadata>`/`<trk><name>` (vehicle, date/time) and `<desc>` (vehicle, device id, distance, moving time, max speed), plus a `<trkseg>` of `<trkpt lat lon>` with an ISO 8601 UTC `<time>` per point. No `<ele>` — not captured by `TripPoint`, and optional per the GPX 1.1 schema
+- [x] `DeviceInfo` — shared `Build.MANUFACTURER + Build.MODEL` utility, feeding the GPX description; reusable elsewhere later (e.g. debug panel)
+- [x] `GpxExportHelper` — builds a filesystem-safe filename (`Vehicle yyyy-MM-dd HH-mm.gpx`, dashes instead of slashes/colons — `/` breaks path creation, `:` is rejected by Windows), writes to `cacheDir/gpx_exports/`, and sweeps exports older than 1 hour once per app launch (`MainActivity.onCreate()`) rather than via a background job
+- [x] `FileProvider` added (manifest + `res/xml/file_paths.xml`), scoped only to the `gpx_exports` cache subfolder — deliberately narrow rather than exposing the whole cache path
+- [x] Verified round-trip: exported a real trip, played it back cleanly in the companion GPX Route Player, confirmed metadata renders correctly; also verified via a LocalSend share to a PC
+- [x] (Unplanned but completed along the way) Fixed a `LocationService.loadPersistedState()` bug in the Trip A 30-minute auto-reset path: the duplicate-check and inserted record both used `currentVehicleId`, which is still at its default (-1, Anonymous) at that point in a freshly-started service instance — nothing has restored the real vehicle id yet. This caused auto-reset entries to be misattributed to "ANONYMOUS" and to always fail their duplicate check, producing a redundant history entry alongside the real session's entry. Fixed by having `stopTrip()` persist the active vehicle id (`KEY_ACTIVE_VEHICLE_ID`, previously declared but unused) at the moment it's known correct, and having `loadPersistedState()` read it back instead of relying on `currentVehicleId`. Existing stale duplicate entries from before the fix were left in place rather than retroactively cleaned up
 
 ### Phase 10 — Picture-in-Picture (Planned)
 - [ ] PiP mode while a session is active, for use alongside Waze/Google Maps (contents and Back-button behaviour still to be finalised)
