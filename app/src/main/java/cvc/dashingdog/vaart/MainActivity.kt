@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
         updateClock()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        GpxExportHelper.cleanupStaleExports(this)
+
         binding.btnStartStop.setOnClickListener {
             locationService?.let { svc ->
                 if (svc.uiState.value.isRunning) handleStopWithSummary()

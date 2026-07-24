@@ -97,6 +97,15 @@
                 android:textSize="13sp"
                 android:layout_marginTop="4dp"/>
 
+            <Button
+                android:id="@+id/btnShareGpx"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Share GPX"
+                android:backgroundTint="#22C55E"
+                android:textColor="#FFFFFF"/>
+
         </LinearLayout>
 
     </ScrollView>

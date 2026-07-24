@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        Scoped deliberately to just the gpx_exports subfolder within cacheDir —
+        not the whole cache-path — so the FileProvider can't expose anything else
+        that might later end up in cacheDir for unrelated reasons.
+    -->
+    <cache-path
+        name="gpx_exports"
+        path="gpx_exports/" />
+</paths>

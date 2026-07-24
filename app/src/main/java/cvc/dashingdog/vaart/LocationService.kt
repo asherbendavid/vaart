@@ -150,12 +150,13 @@ class LocationService : Service() {
 
         if (!tripActive && !tripAPinned && stopTime > 0 &&
             System.currentTimeMillis() - stopTime > TRIP_A_EXPIRY_MS) {
+            val outgoingVehicleId = prefs.getInt(KEY_ACTIVE_VEHICLE_ID, -1)
             val outgoingDistance = prefs.getFloat(KEY_A_DISTANCE, 0f).toDouble()
             if (outgoingDistance > 0.0) {
                 val outgoingTime = prefs.getLong(KEY_A_MOVING_TIME, 0L)
                 val outgoingMax = prefs.getInt(KEY_A_MAX_SPEED, 0)
                 serviceScope.launch {
-                    val lastTrip = repository.getMostRecentTripRecord(currentVehicleId, TripRecord.TYPE_TRIP)
+                    val lastTrip = repository.getMostRecentTripRecord(outgoingVehicleId, TripRecord.TYPE_TRIP)
                     val isDuplicateOfSingleSession = lastTrip != null &&
                             lastTrip.distanceKm == outgoingDistance &&
                             lastTrip.movingTimeMs == outgoingTime &&
@@ -163,7 +164,7 @@ class LocationService : Service() {
                     if (!isDuplicateOfSingleSession) {
                         repository.insertTripRecord(
                             TripRecord(
-                                vehicleId = currentVehicleId,
+                                vehicleId = outgoingVehicleId,
                                 startTime = System.currentTimeMillis(),
                                 endTime = System.currentTimeMillis(),
                                 distanceKm = outgoingDistance,
@@ -389,6 +390,7 @@ class LocationService : Service() {
         prefs.edit()
             .putBoolean(KEY_TRIP_ACTIVE, false)
             .putLong(KEY_A_STOP_TIME, System.currentTimeMillis())
+            .putInt(KEY_ACTIVE_VEHICLE_ID, currentVehicleId)
             .apply()
         isMoving = false
         belowThresholdSince = 0L

@@ -1,10 +1,13 @@
 package cvc.dashingdog.vaart
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import cvc.dashingdog.vaart.databinding.ActivityTripMapBinding
 import kotlinx.coroutines.launch
@@ -23,6 +26,11 @@ class TripMapActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTripMapBinding
     private lateinit var repository: VehicleRepository
     private var mapView: MapView? = null
+
+    // Held after loadTrip() so btnShareGpx can build the export without re-querying the DB.
+    private var currentRecord: TripRecord? = null
+    private var currentPoints: List<TripPoint> = emptyList()
+    private var currentVehicleName: String = "ANONYMOUS"
 
     companion object {
         const val EXTRA_TRIP_ID = "extra_trip_id"
@@ -61,13 +69,53 @@ class TripMapActivity : AppCompatActivity() {
             // Detail section
             bindDetails(record, vehicles)
 
+            // Held for export — resolved the same way bindDetails resolves display name
+            currentRecord = record
+            currentPoints = points
+            currentVehicleName = when {
+                record.vehicleId == -1 -> "ANONYMOUS"
+                vehicles.containsKey(record.vehicleId) -> vehicles[record.vehicleId] ?: "ANONYMOUS"
+                else -> "deleted"
+            }
+
             // Map
             if (points.isEmpty()) {
                 binding.tvNoMap.visibility = View.VISIBLE
             } else {
                 setupMap(points)
             }
+
+            binding.btnShareGpx.isEnabled = points.isNotEmpty()
+            binding.btnShareGpx.setOnClickListener { shareGpx() }
         }
+    }
+
+    private fun shareGpx() {
+        val record = currentRecord ?: return
+        if (currentPoints.isEmpty()) {
+            Toast.makeText(this, "No route points to export.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val gpxContent = TripPointsToGpxWriter.write(
+            record = record,
+            points = currentPoints,
+            vehicleName = currentVehicleName,
+            deviceId = DeviceInfo.deviceId()
+        )
+        val fileName = GpxExportHelper.buildFileName(currentVehicleName, record.startTime)
+        val file = GpxExportHelper.writeToCache(this, fileName, gpxContent)
+
+        val uri = FileProvider.getUriForFile(
+            this, "cvc.dashingdog.vaart.fileprovider", file
+        )
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/gpx+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(shareIntent, "Share GPX route"))
     }
 
     private fun bindDetails(record: TripRecord, vehicleNames: Map<Int, String>) {
